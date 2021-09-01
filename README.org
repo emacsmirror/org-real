@@ -1,0 +1,4 @@
+#+TITLE: Org Real
+
+* Org Real
+  Keep track of real things as org links.
