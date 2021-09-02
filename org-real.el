@@ -2,11 +2,10 @@
 (require 'org)
 (require 'cl)
 
+
 (defclass org-real--box ()
   ((name :initarg :name
          :type string)
-   (style :initarg :style
-          :type string)
    (rel :initarg :rel
         :type string)
    (rel-box :initarg :rel-box
