@@ -55,7 +55,7 @@
                (oset box :behind t))
               ((string= rel "in front of")
                (oset box :x-order (oref prev :x-order))
-               (oset box :y-order (oref prev :y-order))
+               (oset box :y-order 9999)
                (oset box :behind (oref prev :behind))
                (oset box :in-front t))
               ((string= rel "above")
@@ -147,14 +147,72 @@
                   (when (and (slot-boundp from-box :name)
                              (slot-boundp to-box :name)
                              (string= (oref from-box :name) (oref to-box :name)))
-                    (mapc
-                     (lambda (child)
-                       (org-real--flex-add child to-box to))
-                     (oref from-box :children))
+                    (org-real--add-matching from-box to-box to)
                     t))
                 to-boxes))
              from-boxes)
       (org-real--flex-add from to to))))
+
+(defun org-real--map (fn box)
+  (funcall fn box)
+  (mapc
+   (lambda (box) (org-real--map fn box))
+   (org-real--next box t)))
+  
+  
+(defun org-real--next (box &optional exclude-children)
+  (let ((relatives (append (if exclude-children '() (oref box :children))
+                           (oref (oref box :parent) :children))))
+    (seq-filter
+     (lambda (relative)
+       (and (slot-boundp relative :rel-box)
+            (string= (oref (oref relative :rel-box) :name)
+                     (oref box :name))))
+     relatives)))
+
+(defun org-real--add-matching (box match world)
+  (let ((next-boxes (org-real--next box))
+        (parent (oref match :parent)))
+    (mapc
+     (lambda (next)
+       (let ((rel (oref next :rel)))
+         (cond
+          ((string= rel "above")
+           (let ((y-order (oref match :y-order)))
+             (oset next :y-order y-order)
+             (org-real--map
+              (lambda (box) (when (>= (oref box :y-order) y-order)
+                              (oset box :y-order (+ 1 (oref box :y-order)))))
+              match))
+           (oset next :x-order (oref match :x-order))
+           (oset next :behind (oref match :behind)))
+          ((string= rel "below")
+           (oset next :x-order (oref match :x-order))
+           (oset next :y-order (+ 1 (oref match :y-order)))
+           (oset next :behind (oref match :behind)))
+          ((string= rel "to the right of")
+           (oset next :x-order (+ 1 (oref match :x-order)))
+           (oset next :y-order (oref match :y-order))
+           (oset next :behind (oref match :behind))
+           (oset next :in-front (oref match :in-front)))
+          ((string= rel "to the left of")
+           (let ((x-order (oref match :x-order)))
+             (oset next :x-order x-order)
+             (org-real--map
+              (lambda (box) (when (>= (oref box :x-order) x-order)
+                              (oset box :x-order (+ 1 (oref box :x-order)))))
+              match))
+           (oset next :y-order (oref match :y-order))
+           (oset next :behind (oref match :behind))
+           (oset next :in-front (oref match :in-front))))
+
+         (oset next :rel-box match)
+         (if (member rel '("in" "on" "behind" "in front of"))
+             (org-real--flex-add next match world)
+           (oset next :parent parent)
+           (object-add-to-list parent :children next))
+         (org-real--add-matching next next world)))
+     next-boxes)))
 
 (defun org-real--flex-add (box parent world)
   (let* ((cur-width (org-real--get-width world))
@@ -170,11 +228,13 @@
                                           (if (and (= max-y sibling-y) (> sibling-x max-x))
                                               sibling
                                             max))))
-                                    siblings
+                                    (seq-filter
+                                     (lambda (sibling) (not (oref sibling :in-front)))
+                                     siblings)
                                     (org-real--box :y-order -9999)))))
     (oset box :parent parent)
     (object-add-to-list parent :children box)
-    (when last-sibling
+    (when (and last-sibling (not (oref box :in-front)))
       (oset box :y-order (oref last-sibling :y-order))
       (oset box :x-order (+ 1 (oref last-sibling :x-order)))
       (let ((new-width (org-real--get-width world)))
@@ -183,9 +243,6 @@
           (oset box :x-order 0))))))
 
   
-(defun org-real--expand (box)
-  (apply 'append (list box) (mapcar 'org-real--expand (oref box :children))))
-
 (defun org-real-world ()
   (interactive)
   (let* ((box (org-real--parse-buffer))
@@ -194,6 +251,7 @@
     (with-current-buffer-window "Org Real" nil nil
       (dotimes (_ height) (insert (concat (make-string width ?\s) "\n")))
       (org-real--draw box 0)
+      (toggle-truncate-lines t)
       (special-mode))))
 
 
@@ -205,7 +263,6 @@
          (box (org-real--create-box (copy-tree containers))))
     (org-real--pp box (copy-tree containers))))
 
-(defvar org-real--level)
 
 (defvar org-real--padding '(2 . 1))
 (defvar org-real--margin '(2 . 1))
@@ -218,6 +275,7 @@
       (let ((offset (line-number-at-pos)))
         (dotimes (_ (+ 10 height)) (insert (concat (make-string width ?\s) "\n")))
         (org-real--draw box offset)
+        (toggle-truncate-lines t)
         (special-mode)))))
 
 (defface org-real-primary
@@ -353,9 +411,9 @@
       (let* ((x-order (oref box :x-order))
              (y-order (oref box :y-order))
              (above (seq-filter
-                      (lambda (child) (and (= x-order (oref child :x-order))
-                                           (< (oref child :y-order) y-order)))
-                      (oref parent :children)))
+                     (lambda (child) (and (= x-order (oref child :x-order))
+                                          (< (oref child :y-order) y-order)))
+                     (oref parent :children)))
              (directly-above (and above (seq-reduce
                                          (lambda (max child)
                                            (if (> (oref child :y-order) (oref max :y-order))
@@ -366,7 +424,11 @@
         (if directly-above
             (+ (org-real--get-top directly-above)
                (org-real--get-height directly-above))
-          top)))))
+          (if (and (slot-boundp box :rel)
+                   (or (string= "to the left of" (oref box :rel))
+                       (string= "to the right of" (oref box :rel))))
+              (org-real--get-top (oref box :rel-box))
+            top))))))
 
 (defun org-real--get-left (box)
   (if (not (slot-boundp box :parent))
@@ -377,9 +439,9 @@
                     (car org-real--padding)
                     (org-real--get-left parent)))
            (to-the-left (seq-filter
-                          (lambda (child) (and (= (oref box :y-order) (oref child :y-order))
-                                               (< (oref child :x-order) (oref box :x-order))))
-                          (oref parent :children)))
+                         (lambda (child) (and (= (oref box :y-order) (oref child :y-order))
+                                              (< (oref child :x-order) (oref box :x-order))))
+                         (oref parent :children)))
            (directly-left (and to-the-left
                                (seq-reduce
                                 (lambda (max child)
@@ -392,5 +454,9 @@
           (+ (org-real--get-left directly-left)
              (org-real--get-width directly-left)
              (car org-real--margin))
-        left))))
+        (if (and (slot-boundp box :rel)
+                 (or (string= "above" (oref box :rel))
+                     (string= "below" (oref box :rel))))
+            (org-real--get-left (oref box :rel-box))
+          left)))))
                              
