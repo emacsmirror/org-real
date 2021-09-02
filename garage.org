@@ -1,0 +1,4 @@
+* Items in the garage
+  - [[real://garage/workbench?rel=in/wrench?rel=on][wrench]]
+  - [[real://garage/workbench?rel=in/ratchet?rel=on][ratchet]]
+  - [[real://garage/east wall?rel=in/rake?rel=on][rake]]
