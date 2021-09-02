@@ -32,7 +32,7 @@
             :type boolean)))
 
 (defvar org-real-prepositions
-  '("in" "behind" "in front of" "above" "below" "to the left of" "to the right of"))
+  '("in" "on" "behind" "in front of" "above" "below" "to the left of" "to the right of"))
 
 (defun org-real--create-box (containers &optional parent prev)
   (if (not parent)
@@ -45,7 +45,7 @@
       (when prev
         (oset box :rel (plist-get container :rel))
         (oset box :rel-box prev)
-        (cond ((string= rel "in")
+        (cond ((or (string= rel "in") (string= rel "on"))
                (oset box :x-order (oref prev :x-order))
                (oset box :y-order (oref prev :y-order))
                (oset box :behind (oref prev :behind)))
@@ -79,7 +79,7 @@
                (oset box :in-front (oref prev :in-front)))))
 
       (if (and prev (member (oref box :rel)
-                            '("in" "behind" "in front of")))
+                            '("in" "on" "behind" "in front of")))
           (progn
             (oset box :parent prev)
             (object-add-to-list prev :children box)
