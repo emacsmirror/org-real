@@ -60,7 +60,7 @@
                (oset box :in-front t))
               ((string= rel "above")
                (oset box :x-order (oref prev :x-order))
-               (oset box :y-order (- 1 (oref prev :y-order)))
+               (oset box :y-order (- (oref prev :y-order) 1))
                (oset box :behind (oref prev :behind)))
               ((string= rel "below")
                (oset box :x-order (oref prev :x-order))
@@ -68,7 +68,7 @@
                (oset box :behind (oref prev :behind))
                (oset box :in-front (oref prev :in-front)))
               ((string= rel "to the left of")
-               (oset box :x-order (- 1 (oref prev :x-order)))
+               (oset box :x-order (- (oref prev :x-order) 1))
                (oset box :y-order (oref prev :y-order))
                (oset box :behind (oref prev :behind))
                (oset box :in-front (oref prev :in-front)))
@@ -112,6 +112,90 @@
                             container)))
                       tokens)))
     (add-to-list 'containers (list :name host))))
+
+(defun org-real--parse-buffer ()
+  (let ((boxes '()))
+    (org-element-map (org-element-parse-buffer) 'link
+      (lambda (link)
+        (if (string= (org-element-property :type link) "real")
+            (add-to-list 'boxes
+                         (org-real--create-box
+                          (org-real--parse-url
+                           (org-element-property :raw-link link)))
+                         t))))
+    (org-real--merge boxes)))
+
+(defun org-real--merge (boxes)
+  (if (< (length boxes) 2)
+      (if (= 0 (length boxes))
+          (org-real--box)
+        (car boxes))
+    (let ((world (org-real--box))
+          box)
+      (while boxes
+        (setq box (pop boxes))
+        (org-real--merge-into box world))
+      world)))
+    
+(defun org-real--merge-into (from to)
+  (let ((from-boxes (reverse (org-real--expand from)))
+        (to-boxes (reverse (org-real--expand to))))
+    (unless (seq-some
+             (lambda (from-box)
+               (seq-some
+                (lambda (to-box)
+                  (when (and (slot-boundp from-box :name)
+                             (slot-boundp to-box :name)
+                             (string= (oref from-box :name) (oref to-box :name)))
+                    (mapc
+                     (lambda (child)
+                       (org-real--flex-add child to-box to))
+                     (oref from-box :children))
+                    t))
+                to-boxes))
+             from-boxes)
+      (org-real--flex-add from to to))))
+
+(defun org-real--flex-add (box parent world)
+  (let* ((cur-width (org-real--get-width world))
+         (siblings (oref parent :children))
+         (last-sibling (and siblings (seq-reduce
+                                    (lambda (max sibling)
+                                      (let ((max-x (oref max :x-order))
+                                            (max-y (oref max :y-order))
+                                            (sibling-x (oref sibling :x-order))
+                                            (sibling-y (oref sibling :y-order)))
+                                        (if (> sibling-y max-y)
+                                            sibling
+                                          (if (and (= max-y sibling-y) (> sibling-x max-x))
+                                              sibling
+                                            max))))
+                                    siblings
+                                    (org-real--box :y-order -9999)))))
+    (oset box :parent parent)
+    (object-add-to-list parent :children box)
+    (when last-sibling
+      (oset box :y-order (oref last-sibling :y-order))
+      (oset box :x-order (+ 1 (oref last-sibling :x-order)))
+      (let ((new-width (org-real--get-width world)))
+        (when (and (> new-width cur-width) (> new-width 80))
+          (oset box :y-order (+ 1 (oref last-sibling :y-order)))
+          (oset box :x-order 0))))))
+
+  
+(defun org-real--expand (box)
+  (apply 'append (list box) (mapcar 'org-real--expand (oref box :children))))
+
+(defun org-real-world ()
+  (interactive)
+  (let* ((box (org-real--parse-buffer))
+         (width (org-real--get-width box))
+         (height (org-real--get-height box)))
+    (with-current-buffer-window "Org Real" nil nil
+      (dotimes (_ height) (insert (concat (make-string width ?\s) "\n")))
+      (org-real--draw box 0)
+      (special-mode))))
+
 
 (org-link-set-parameters "real"
                          :follow #'org-real-follow)
@@ -270,7 +354,7 @@
              (y-order (oref box :y-order))
              (above (seq-filter
                       (lambda (child) (and (= x-order (oref child :x-order))
-                                           (< y-order (oref child :y-order))))
+                                           (< (oref child :y-order) y-order)))
                       (oref parent :children)))
              (directly-above (and above (seq-reduce
                                          (lambda (max child)
@@ -280,7 +364,8 @@
                                          above
                                          (org-real--box :y-order -9999)))))
         (if directly-above
-            (+ (cdr org-real--margin) offset (org-real--get-top directly-above))
+            (+ (org-real--get-top directly-above)
+               (org-real--get-height directly-above))
           top)))))
 
 (defun org-real--get-left (box)
@@ -293,7 +378,7 @@
                     (org-real--get-left parent)))
            (to-the-left (seq-filter
                           (lambda (child) (and (= (oref box :y-order) (oref child :y-order))
-                                               (< (oref box :x-order) (oref child :x-order))))
+                                               (< (oref child :x-order) (oref box :x-order))))
                           (oref parent :children)))
            (directly-left (and to-the-left
                                (seq-reduce
@@ -305,9 +390,7 @@
                                 (org-real--box :x-order -9999)))))
       (if directly-left
           (+ (org-real--get-left directly-left)
-             (if (slot-boundp directly-left :name)
-                 (length (oref directly-left :name))
-               0)
-             offset)
+             (org-real--get-width directly-left)
+             (car org-real--margin))
         left))))
                              
