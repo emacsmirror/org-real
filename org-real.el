@@ -26,7 +26,10 @@
            :type org-real--box)
    (children :initarg :children
              :initform '()
-             :type list)))
+             :type list)
+   (primary :initarg :primary
+            :initform nil
+            :type boolean)))
 
 (defvar org-real-prepositions
   '("in" "behind" "in front of" "above" "below" "to the left of" "to the right of"))
@@ -81,11 +84,13 @@
             (oset box :parent prev)
             (object-add-to-list prev :children box)
             (if containers
-                (org-real--create-box containers prev box)))
+                (org-real--create-box containers prev box)
+              (oset box :primary t)))
         (oset box :parent parent)
         (object-add-to-list parent :children box)
         (if containers
-            (org-real--create-box containers parent box))))))
+            (org-real--create-box containers parent box)
+          (oset box :primary t))))))
     
 (defun org-real--parse-url (str)
   "Parse URL into an org real object"
@@ -131,13 +136,22 @@
         (org-real--draw box offset)
         (special-mode)))))
 
+(defface org-real-primary
+  '((t :background "aquamarine"
+       :foreground "black"))
+  "Face for the last thing in a url"
+  :group 'org-real)
+
 (defun org-real--pp-text (containers)
   (let* ((reversed (reverse containers))
-         (container (pop reversed)))
+         (container (pop reversed))
+         (primary-name (plist-get container :name)))
     (dotimes (_ (cdr org-real--padding)) (insert "\n"))
     (insert (make-string (car org-real--padding) ?\s))
     (insert "The ")
-    (insert (plist-get container :name))
+    (put-text-property 0 (length primary-name) 'face 'org-real-primary
+                       primary-name)
+    (insert primary-name)
     (if reversed (insert " is"))
     (while reversed
       (insert " ")
@@ -158,10 +172,14 @@
                (name (oref box :name))
                (children (oref box :children))
                (dashed (oref box :behind))
-               (align-bottom (oref box :in-front)))
-          (cl-flet ((draw (coords str)
+               (align-bottom (oref box :in-front))
+               (primary (oref box :primary)))
+          (cl-flet ((draw (coords str &optional primary)
                        (goto-line (car coords))
                        (move-to-column (cdr coords) t)
+                       (if primary
+                           (put-text-property 0 (length str) 'face 'org-real-primary
+                                              str))
                        (insert str)
                        (delete-char (length str))))
             (draw (cons top left)
@@ -173,7 +191,8 @@
                     (concat "└" (make-string (- width 2) (if dashed #x254c #x2500)) "┘")))
             (draw (cons (+ top 1 (cdr org-real--padding))
                         (+ left 1 (car org-real--padding)))
-                  name)
+                  name
+                  primary)
             (let ((r (+ top 1))
                   (c1 left)
                   (c2 (+ left width -1)))
