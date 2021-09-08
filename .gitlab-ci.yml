@@ -30,8 +30,8 @@ release:
     description: $CI_COMMIT_DESCRIPTION
     assets:
       links:
-        - name: $FILENAME_BASE.tar
-          url: $DIST_DIR/$FILENAME_BASE.tar
+        - name: $FILENAME_BASE.el
+          url: $DIST_DIR/$FILENAME_BASE.el
         - name: $FILENAME_BASE.md5
           url: $DIST_DIR/$FILENAME_BASE.md5
   script:
