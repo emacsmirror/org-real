@@ -8,10 +8,9 @@ Keep track of real things as org links.
 #+end_src
 
 * Status *PARTIALLY WORKING*
-
-** TODO Allow things to have multiple children with the same preposition
-** TODO =org-real-world= flex layout sometimes draws over existing boxes
-** TODO Ask to replace all occurences after editing a link
+  - TODO Allow things to have multiple children with the same preposition
+  - TODO =org-real-world= flex layout sometimes draws over existing boxes
+  - TODO Ask to replace all occurences after editing a link
 
 * Usage
 ** Inserting a link
@@ -31,7 +30,7 @@ Keep track of real things as org links.
        │  │           ↑            │  │
        │  │           ↑            │  │
        │  │  ┌─────── ↑ ────────┐  │  │
-       │  │  │                  │  │  │
+       │  │  │        ↑         │  │  │
        │  │  │      inside      │  │  │
        │  │  │                  │  │  │
        │  │  └──────────────────┘  │  │
