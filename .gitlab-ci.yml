@@ -2,19 +2,6 @@ stages:
   - build
   - release
 
-server:
-  stage: build
-  image: node:lts-alpine
-  cache:
-    key: $CI_COMMIT_REF_SLUG
-    paths:
-      - .npm
-  before_script:
-    - npm set cache .npm
-    - npm ci
-  script:
-    - npm run quality:check
-
 package:
   stage: build
   image: silex/emacs:27
