@@ -488,7 +488,8 @@ describing where BOX is."
       (insert " the ")
       (insert (plist-get container :name)))
     (insert ".")
-    (fill-paragraph)))
+    (fill-paragraph)
+    (insert "\n")))
 
 (defun org-real--draw (box offset)
   "Insert an ascii drawing of BOX into the current buffer.
