@@ -339,14 +339,10 @@ that the width of WORLD is kept below 80 characters if possible."
 (defun org-real-world ()
   "View all real links in the current buffer."
   (interactive)
-  (let* ((box (org-real--merge (mapcar 'org-real--create-box (org-real--parse-buffer))))
-         (width (org-real--get-width box))
-         (height (org-real--get-height box)))
-    (with-current-buffer-window "Org Real" nil nil
-      (dotimes (_ height) (insert (concat (make-string width ?\s) "\n")))
-      (org-real--draw box 0)
-      (toggle-truncate-lines t)
-      (special-mode))))
+  (org-real--pp
+   (org-real--merge
+    (mapcar 'org-real--create-box
+            (org-real--parse-buffer)))))
 
 ;;;; `org-insert-link' configuration
 
@@ -457,16 +453,20 @@ describing where BOX is."
         (height (org-real--get-height box))
         (inhibit-read-only t)
         (buffer (get-buffer-create "Org Real")))
-    (display-buffer buffer 'display-buffer-pop-up-window)
     (with-current-buffer buffer
       (erase-buffer)
       (goto-line 0)
       (toggle-truncate-lines t)
       (if containers (org-real--pp-text containers))
-      (let ((offset (line-number-at-pos)))
+      (let ((offset (- (line-number-at-pos)
+                       (cdr org-real--margin)
+                       (* 2 (cdr org-real--padding)))))
         (dotimes (_ (+ top height)) (insert (concat (make-string width ?\s) "\n")))
         (org-real--draw box offset)
-        (special-mode)))))
+        (special-mode)))
+    (display-buffer buffer `(display-buffer-pop-up-window
+                             (window-width . 80)
+                             (window-height . ,height)))))
 
 
 (defun org-real--pp-text (containers)
