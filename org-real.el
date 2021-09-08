@@ -421,27 +421,29 @@ matching the one returned from `completing-read'."
         existing-containers
       `((:name ,result)))))
 
-(defun org-real--read-string-advice (orig prompt link)
+(defun org-real--read-string-advice (orig prompt link &rest args)
   "Advise `read-string' during `org-insert-link' to use custom completion.
 
 ORIG is `read-string', PROMPT and LINK are the arguments passed
 to it."
   (if (string= "real" (ignore-errors (url-type (url-generic-parse-url link))))
       (org-real-complete link)
-    (funcall orig prompt link)))
+    (apply orig prompt link args)))
 
-(defun org-real--insert-link-advice (orig &rest args)
+(defun org-real--insert-link-before (&rest args)
   "Advise `org-insert-link' to advise `read-string' during editing of a link.
 
-ORIG is `org-insert-link' and ARGS are the arguments passed to
-it."
-  (advice-add 'read-string :around #'org-real--read-string-advice)
-  (if (called-interactively-p 'any)
-      (call-interactively orig)
-    (apply orig args))
+ARGS are the arguments passed to `org-insert-link'."
+  (advice-add 'read-string :around #'org-real--read-string-advice))
+
+(defun org-real--insert-link-after (&rest args)
+  "Advise `org-insert-link' to advise `read-string' during editing of a link.
+
+ARGS are the arguments passed to `org-insert-link'."
   (advice-remove 'read-string #'org-real--read-string-advice))
 
-(advice-add 'org-insert-link :around #'org-real--insert-link-advice)
+(advice-add 'org-insert-link :before #'org-real--insert-link-before)
+(advice-add 'org-insert-link :after #'org-real--insert-link-after)
 
 ;;;; Pretty printing
 
