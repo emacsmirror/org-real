@@ -151,7 +151,7 @@ parameters are used internally and should not be supplied."
   "Parse STR into a list of plists.
 
 Returns a list of plists with a :name property and optionally a
-:ref property."
+:rel property."
   (let* ((url (url-generic-parse-url str))
          (host (url-host url))
          (path-and-query (url-path-and-query url))
