@@ -424,8 +424,8 @@ matching the one returned from `completing-read'."
 (defun org-real--read-string-advice (orig prompt link &rest args)
   "Advise `read-string' during `org-insert-link' to use custom completion.
 
-ORIG is `read-string', PROMPT and LINK are the arguments passed
-to it."
+ORIG is `read-string', PROMPT and LINK and ARGS are the arguments
+passed to it."
   (if (string= "real" (ignore-errors (url-type (url-generic-parse-url link))))
       (org-real-complete link)
     (apply orig prompt link args)))
