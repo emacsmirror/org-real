@@ -1,7 +1,29 @@
+;;; org-real.el --- Create org-mode links to real things -*- lexical-binding: t -*-
+
+;; Author: Tyler Grinn <tylergrinn@gmail.com>
+;; Version: 0.0.1
+;; File: org-real.el
+;; Package-Requires: ((emacs "26.1"))
+;; Keywords: tools
+;; URL: https://gitlab.com/tygrdev/org-real
+
+;;; Commentary:
+
+;; This package adds a 'real' type link to org mode to create links to
+;; real things.
+;;
+;; The function `org-real-world' will display all real links in the
+;; current buffer.
+
+;;; Code:
+
+;;;; Requirements
+
 (require 'eieio)
 (require 'org)
-(require 'cl)
+(require 'cl-lib)
 
+;;;; Classes
 
 (defclass org-real--box ()
   ((name :initarg :name
@@ -31,10 +53,12 @@
             :initform nil
             :type boolean)))
 
-(defvar org-real-prepositions
-  '("in" "on" "behind" "in front of" "above" "below" "to the left of" "to the right of"))
-
 (defun org-real--create-box (containers &optional parent prev)
+  "Create an `org-real--box' from CONTAINERS.
+
+CONTAINERS is a list of plists containing at least a :name
+property and optionally a :rel property.  PARENT and PREV
+parameters are used internally and should not be supplied."
   (if (not parent)
       (let ((world (org-real--box)))
         (org-real--create-box containers world)
@@ -91,9 +115,43 @@
         (if containers
             (org-real--create-box containers parent box)
           (oset box :primary t))))))
-    
+
+;;;; Faces
+
+(defface org-real-primary
+  '((t :background "aquamarine"
+       :foreground "black"))
+  "Face for the last thing in a real link."
+  :group 'org-real)
+
+;;;; Constants
+
+(defconst org-real-prepositions
+  '("in" "on" "behind" "in front of" "above" "below" "to the left of" "to the right of")
+  "List of available prepositions for things.")
+(defvar org-real--padding '(2 . 1)
+  "Padding used when displaying a real link.")
+(defvar org-real--margin '(2 . 1)
+  "Margin used when displaying a real link.")
+
+;;;; Utility expressions
+
+(defun org-real--find-last-index (pred sequence)
+  "Return the index of the last element for which (PRED element) is non-nil in SEQUENCE."
+  (let ((i (- (length sequence) 1)))
+    (catch 'match
+      (mapc
+       (lambda (elt)
+         (if (funcall pred elt) (throw 'match i))
+         (setq i (- i 1)))
+       (reverse sequence)))
+    i))
+
 (defun org-real--parse-url (str)
-  "Parse URL into an org real object"
+  "Parse STR into a list of plists.
+
+Returns a list of plists with a :name property and optionally a
+:ref property."
   (let* ((url (url-generic-parse-url str))
          (host (url-host url))
          (path-and-query (url-path-and-query url))
@@ -103,7 +161,7 @@
                                    "/")))
          (containers (mapcar
                       (lambda (token)
-                        (let* ((location (split-string token "?"))
+                        (let* ((location (split-string token "\\?"))
                                (container (list :name (car location)))
                                (rel (and (string-match "&?rel=\\([^&]*\\)" (cadr location))
                                          (match-string 1 (cadr location)))))
@@ -114,18 +172,54 @@
     (add-to-list 'containers (list :name host))))
 
 (defun org-real--parse-buffer ()
-  (let ((boxes '()))
+  "Parse all real links in the current buffer."
+  (let ((container-matrix '()))
     (org-element-map (org-element-parse-buffer) 'link
       (lambda (link)
         (if (string= (org-element-property :type link) "real")
-            (add-to-list 'boxes
-                         (org-real--create-box
+            (add-to-list 'container-matrix
                           (org-real--parse-url
-                           (org-element-property :raw-link link)))
-                         t))))
-    (org-real--merge boxes)))
+                           (org-element-property :raw-link link))
+                          t))))
+    container-matrix))
+
+(defun org-real--to-link (containers)
+  "Create a link string from CONTAINERS."
+  (concat "real://"
+          (mapconcat
+           (lambda (container)
+             (concat (plist-get container :name)
+                     (when (plist-member container :rel)
+                       (concat "?rel=" (plist-get container :rel)))))
+           containers
+           "/")))
+
+(defun org-real--map-immediate (fn box)
+  "Map a function across all immediate relatives of a box.
+
+Any box with a :rel-box slot equivalent to BOX will be passed to
+FN."
+  (progn
+    (funcall fn box)
+    (mapc
+     (lambda (box) (org-real--map-immediate fn box))
+     (org-real--next box t))))
+
+(defun org-real--next (box &optional exclude-children)
+  "Retrieve any boxes for which the :rel-box slot is BOX.
+
+If EXCLUDE-CHILDREN, only retrieve sibling boxes."
+  (let ((relatives (append (if exclude-children '() (oref box :children))
+                           (if (slot-boundp box :parent) (oref (oref box :parent) :children) '()))))
+    (seq-filter
+     (lambda (relative)
+       (and (slot-boundp relative :rel-box)
+            (string= (oref (oref relative :rel-box) :name)
+                     (oref box :name))))
+     relatives)))
 
 (defun org-real--merge (boxes)
+  "Merge BOXES into a single box."
   (if (< (length boxes) 2)
       (if (= 0 (length boxes))
           (org-real--box)
@@ -136,8 +230,13 @@
         (setq box (pop boxes))
         (org-real--merge-into box world))
       world)))
-    
+
+(defun org-real--expand (box)
+  "Get a list of all boxes, including BOX, that are children of BOX."
+  (apply 'append (list box) (mapcar 'org-real--expand (oref box :children))))
+
 (defun org-real--merge-into (from to)
+  "Merge FROM box into TO box."
   (let ((from-boxes (reverse (org-real--expand from)))
         (to-boxes (reverse (org-real--expand to))))
     (unless (seq-some
@@ -153,24 +252,12 @@
              from-boxes)
       (org-real--flex-add from to to))))
 
-(defun org-real--map (fn box)
-  (funcall fn box)
-  (mapc
-   (lambda (box) (org-real--map fn box))
-   (org-real--next box t)))
-  
-  
-(defun org-real--next (box &optional exclude-children)
-  (let ((relatives (append (if exclude-children '() (oref box :children))
-                           (oref (oref box :parent) :children))))
-    (seq-filter
-     (lambda (relative)
-       (and (slot-boundp relative :rel-box)
-            (string= (oref (oref relative :rel-box) :name)
-                     (oref box :name))))
-     relatives)))
 
 (defun org-real--add-matching (box match world)
+  "Add BOX to WORLD after finding a matching box MATCH already in WORLD.
+
+MATCH is used to set the :rel-box and :parent slots on children
+of BOX."
   (let ((next-boxes (org-real--next box))
         (parent (oref match :parent)))
     (mapc
@@ -180,7 +267,7 @@
           ((string= rel "above")
            (let ((y-order (oref match :y-order)))
              (oset next :y-order y-order)
-             (org-real--map
+             (org-real--map-immediate
               (lambda (box) (when (>= (oref box :y-order) y-order)
                               (oset box :y-order (+ 1 (oref box :y-order)))))
               match))
@@ -198,7 +285,7 @@
           ((string= rel "to the left of")
            (let ((x-order (oref match :x-order)))
              (oset next :x-order x-order)
-             (org-real--map
+             (org-real--map-immediate
               (lambda (box) (when (>= (oref box :x-order) x-order)
                               (oset box :x-order (+ 1 (oref box :x-order)))))
               match))
@@ -215,6 +302,10 @@
      next-boxes)))
 
 (defun org-real--flex-add (box parent world)
+  "Add BOX to a PARENT box already existing in WORLD.
+
+This function ignores the :rel slot and adds BOX in such a way
+that the width of WORLD is kept below 80 characters if possible."
   (let* ((cur-width (org-real--get-width world))
          (siblings (oref parent :children))
          (last-sibling (and siblings (seq-reduce
@@ -242,10 +333,13 @@
           (oset box :y-order (+ 1 (oref last-sibling :y-order)))
           (oset box :x-order 0))))))
 
-  
+
+;;;; Interactive functions
+
 (defun org-real-world ()
+  "View all real links in the current buffer."
   (interactive)
-  (let* ((box (org-real--parse-buffer))
+  (let* ((box (org-real--merge (mapcar 'org-real--create-box (org-real--parse-buffer))))
          (width (org-real--get-width box))
          (height (org-real--get-height box)))
     (with-current-buffer-window "Org Real" nil nil
@@ -254,37 +348,127 @@
       (toggle-truncate-lines t)
       (special-mode))))
 
+;;;; `org-insert-link' configuration
 
 (org-link-set-parameters "real"
-                         :follow #'org-real-follow)
+                         :follow #'org-real-follow
+                         :complete #'org-real-complete)
 
 (defun org-real-follow (url &rest args)
+  "Open a real link URL in a popup buffer.
+
+ARGS are ignored."
   (let* ((containers (org-real--parse-url url))
          (box (org-real--create-box (copy-tree containers))))
     (org-real--pp box (copy-tree containers))))
 
 
-(defvar org-real--padding '(2 . 1))
-(defvar org-real--margin '(2 . 1))
+(defun org-real-complete (&optional existing)
+  "Complete a real link or edit EXISTING link."
+  (let* ((container-matrix (org-real--parse-buffer))
+         (containers (if existing
+                         (org-real--parse-url existing)
+                       (org-real--complete-thing "Thing: " container-matrix))))
+    (catch 'confirm
+      (while t
+        (org-real--pp (org-real--create-box containers) containers)
+        (let ((response (read-event "RETURN    - Confirm\nBACKSPACE - Remove context\n+         - Add context")))
+          (cond
+           ((eq response 'return)
+            (throw 'confirm containers))
+           ((eq response 'backspace)
+            (pop containers)
+            (if (= 0 (length containers))
+                (setq containers (org-real--complete-thing "Thing: " container-matrix))))
+           ((eq response ?+)
+            (let* ((top (plist-get (car containers) :name))
+                   (preposition
+                    (completing-read (concat "The " top " is: ") org-real-prepositions nil t))
+                   (additional-containers
+                    (org-real--complete-thing (concat "The " top " is " preposition " the: ") container-matrix)))
+              (setcar containers (plist-put (car containers) :rel preposition))
+              (setq containers (append additional-containers containers))))))))
+    (org-real--to-link containers)))
 
-(defun org-real--pp (box containers)
-  (let ((width (org-real--get-width box))
-        (height (org-real--get-height box)))
-    (with-current-buffer-window "Org Real" nil nil
-      (org-real--pp-text containers)
+(defun org-real--complete-thing (prompt container-matrix)
+  "Use `completing-read' with PROMPT to get a list of containers.
+
+CONTAINER-MATRIX is used to generate possible completions.  The
+return value is the longest list of containers from the matrix
+that contains, as the last element, a container with a name
+matching the one returned from `completing-read'."
+  (let* ((completions (mapcar
+                       (lambda (container) (plist-get container :name))
+                       (apply 'append container-matrix)))
+         (result (completing-read prompt completions nil 'confirm))
+         (existing-containers (car (seq-sort
+                                    (lambda (a b) (> (length a) (length b)))
+                                    (mapcar
+                                     (lambda (containers)
+                                       (cl-subseq containers 0
+                                                  (+ 1 (org-real--find-last-index
+                                                        (lambda (container)
+                                                          (string= (plist-get container :name) result))
+                                                        containers))))
+                                     (seq-filter
+                                      (lambda (containers)
+                                        (seq-some
+                                         (lambda (container)
+                                           (string= (plist-get container :name) result))
+                                         containers))
+                                      container-matrix))))))
+    (if existing-containers
+        existing-containers
+      `((:name ,result)))))
+
+(defun org-real--read-string-advice (orig prompt link)
+  "Advise `read-string' during `org-insert-link' to use custom completion.
+
+ORIG is `read-string', PROMPT and LINK are the arguments passed
+to it."
+  (if (string= "real" (ignore-errors (url-type (url-generic-parse-url link))))
+      (org-real-complete link)
+    (funcall orig prompt link)))
+
+(defun org-real--insert-link-advice (orig &rest args)
+  "Advise `org-insert-link' to advise `read-string' during editing of a link.
+
+ORIG is `org-insert-link' and ARGS are the arguments passed to
+it."
+  (advice-add 'read-string :around #'org-real--read-string-advice)
+  (if (called-interactively-p 'any)
+      (call-interactively orig)
+    (apply orig args))
+  (advice-remove 'read-string #'org-real--read-string-advice))
+
+(advice-add 'org-insert-link :around #'org-real--insert-link-advice)
+
+;;;; Pretty printing
+
+(defun org-real--pp (box &optional containers)
+  "Pretty print BOX in a popup buffer.
+
+If CONTAINERS is passed in, also pretty print a sentence
+describing where BOX is."
+  (let ((top (org-real--get-top box))
+        (width (org-real--get-width box))
+        (height (org-real--get-height box))
+        (inhibit-read-only t)
+        (buffer (get-buffer-create "Org Real")))
+    (display-buffer buffer 'display-buffer-pop-up-window)
+    (with-current-buffer buffer
+      (erase-buffer)
+      (goto-line 0)
+      (toggle-truncate-lines t)
+      (if containers (org-real--pp-text containers))
       (let ((offset (line-number-at-pos)))
-        (dotimes (_ (+ 10 height)) (insert (concat (make-string width ?\s) "\n")))
+        (dotimes (_ (+ top height)) (insert (concat (make-string width ?\s) "\n")))
         (org-real--draw box offset)
-        (toggle-truncate-lines t)
         (special-mode)))))
 
-(defface org-real-primary
-  '((t :background "aquamarine"
-       :foreground "black"))
-  "Face for the last thing in a url"
-  :group 'org-real)
 
 (defun org-real--pp-text (containers)
+  "Insert a textual representation of CONTAINERS into the current buffer."
   (let* ((reversed (reverse containers))
          (container (pop reversed))
          (primary-name (plist-get container :name)))
@@ -305,6 +489,9 @@
     (fill-paragraph)))
 
 (defun org-real--draw (box offset)
+  "Insert an ascii drawing of BOX into the current buffer.
+
+OFFSET is the starting line to start insertion."
   (let ((children (oref box :children)))
     (if (slot-boundp box :name)
         (let* ((top (+ offset (org-real--get-top box)))
@@ -338,16 +525,17 @@
             (let ((r (+ top 1))
                   (c1 left)
                   (c2 (+ left width -1)))
-              (dotimes (_var (- height (if align-bottom 1 2)))
+              (dotimes (_ (- height (if align-bottom 1 2)))
                 (draw (cons r c1) (if dashed "╎" "│"))
                 (draw (cons r c2) (if dashed "╎" "│"))
                 (setq r (+ r 1)))))))
     (mapc
      (lambda (child) (org-real--draw child offset))
      children)))
-    
+
 
 (defun org-real--get-width (box)
+  "Get the width of BOX."
   (let* ((base-width (+ 2 ; box walls
                         (* 2 (car org-real--padding))))
          (width (+ base-width (if (slot-boundp box :name)
@@ -361,7 +549,7 @@
          (lambda (child)
            (add-to-list 'rows (oref child :y-order)))
          children)
-        (let ((child-widths (mapcar 
+        (let ((child-widths (mapcar
                              (lambda (row)
                                (+ base-width
                                   (seq-reduce
@@ -376,6 +564,7 @@
           (apply 'max width child-widths))))))
 
 (defun org-real--get-height (box)
+  "Get the height of BOX."
   (let ((height (+ (if (oref box :in-front)
                        (* -1 (cdr org-real--margin))
                      0)
@@ -401,8 +590,9 @@
                                     0)))
                               columns)))
           (apply 'max height child-heights))))))
-                     
+
 (defun org-real--get-top (box)
+  "Get the top row index of BOX."
   (if (not (slot-boundp box :parent))
       0
     (let* ((offset (+ 1 (* 2 (cdr org-real--padding)) (cdr org-real--margin)))
@@ -431,6 +621,7 @@
             top))))))
 
 (defun org-real--get-left (box)
+  "Get the left column index of BOX."
   (if (not (slot-boundp box :parent))
       0
     (let* ((offset (+ 2 (* 2 (car org-real--padding)) (car org-real--margin)))
@@ -459,4 +650,7 @@
                      (string= "below" (oref box :rel))))
             (org-real--get-left (oref box :rel-box))
           left)))))
-                             
+
+(provide 'org-real)
+
+;;; org-real.el ends here

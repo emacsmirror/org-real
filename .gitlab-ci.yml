@@ -1,0 +1,55 @@
+stages:
+  - build
+  - release
+
+server:
+  stage: build
+  image: node:lts-alpine
+  cache:
+    key: $CI_COMMIT_REF_SLUG
+    paths:
+      - .npm
+  before_script:
+    - npm set cache .npm
+    - npm ci
+  script:
+    - npm run quality:check
+
+package:
+  stage: build
+  image: silex/emacs:27
+  before_script:
+    - curl -fsSL https://raw.github.com/doublep/eldev/master/webinstall/eldev | sh
+  script:
+    - /root/.eldev/bin/eldev -dtT lint
+    - /root/.eldev/bin/eldev -dtT package
+    - /root/.eldev/bin/eldev -dtT md5
+  artifacts:
+    paths:
+      - dist/
+
+release:
+  stage: release
+  only:
+    - tags
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  dependencies:
+    - package
+  variables:
+    DIST_DIR: $CI_PROJECT_URL/-/jobs/$CI_JOB_ID/artifacts/raw/dist
+    FILENAME_BASE: $CI_PROJECT_NAME-$CI_COMMIT_TAG
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: $CI_COMMIT_DESCRIPTION
+    assets:
+      links:
+        - name: $FILENAME_BASE.tar
+          url: $DIST_DIR/$FILENAME_BASE.tar
+        - name: $FILENAME_BASE.md5
+          url: $DIST_DIR/$FILENAME_BASE.md5
+  script:
+    - echo Release job
+  artifacts:
+    paths:
+      - dist/
+    expire_in: never
