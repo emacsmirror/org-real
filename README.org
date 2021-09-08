@@ -1,4 +1,88 @@
 #+TITLE: Org Real
 
-* Org Real
-  Keep track of real things as org links.
+Keep track of real things as org links.
+
+#+begin_src emacs-lisp
+(use-package org-real
+  :straight (org-real :type git :host gitlab :repo "tygrdev/org-real"))
+#+end_src
+
+* Status *PARTIALLY WORKING*
+
+** TODO Allow things to have multiple children with the same preposition
+** TODO =org-real-world= flex layout sometimes draws over existing boxes
+** TODO Ask to replace all occurences after editing a link
+
+* Usage
+** Inserting a link
+   To create a real link in org-mode, use =C-c C-l real RET=.
+
+   Real links are created inside-out, starting with the most specific
+   item and working to the most general.
+
+   #+begin_example
+  
+       ┌──────────────────────────────┐
+       │                              │
+       │           outside            │
+       │              ↑               │
+       │  ┌────────── ↑ ───────────┐  │
+       │  │           ↑            │  │
+       │  │           ↑            │  │
+       │  │           ↑            │  │
+       │  │  ┌─────── ↑ ────────┐  │  │
+       │  │  │                  │  │  │
+       │  │  │      inside      │  │  │
+       │  │  │                  │  │  │
+       │  │  └──────────────────┘  │  │
+       │  │                        │  │
+       │  └────────────────────────┘  │
+       │                              │
+       └──────────────────────────────┘
+
+   #+end_example
+
+   The first prompt will be for the thing which is trying to be linked
+   to, called the "primary thing". Then, the prompt will continue to
+   ask if more context should be added by pressing =+= until the user
+   confirms the link with =RET=.
+
+   [[file:demo/insert-link.gif]]
+
+** Inserting a link with completion
+
+   Org real will help create links by parsing all existing links in
+   the current buffer. When choosing an existing thing, all of the
+   context for that thing is automatically added to the current
+   completion.
+
+   This is only possible because of the unique inside-out completion
+   style for inserting a link and makes it very easy to add new things
+   to an existing container.
+
+   [[file:demo/insert-link-with-completion.gif]]
+
+** Rearranging things
+
+   In order to edit a real link, place the cursor on the link and
+   press =C-c C-l=. Narrow the link down beyond the context you wish
+   to change by pressing =BACKSPACE= repeatedly, then =+= to add the
+   new context.
+
+   [[file:demo/edit-link.gif]]
+
+** Opening links
+
+   To open a link, place the cursor within the link and press =C-c
+   C-o=. This will display a popup buffer showing the location of the
+   thing described by the link.
+
+   [[file:demo/open-link.gif]]
+
+** =org-real-world= (expirimental)
+   
+   To view all real links in the current buffer in a combined diagram,
+   use the interactive function =org-real-world=
+
+   [[file:demo/org-real-world.png]]
+   
