@@ -6,3 +6,5 @@
   - [[real://garage/east wall?rel=in/rake?rel=on/shovel?rel=to the left of][shovel]]
   - [[real://garage/east wall?rel=in/rake?rel=on/hoe?rel=to the left of][hoe]]
   - [[real://garage/workbench?rel=in/wrench?rel=on/paintbrush?rel=above][paintbrush]]
+  - [[real://garage/workbench?rel=in/ratchet?rel=on/hammer?rel=to the right of][hammer]]
+  - [[real://garage/workbench?rel=in/ratchet?rel=on/nails?rel=to the right of][nails]]
