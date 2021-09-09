@@ -144,8 +144,8 @@ parameters are used internally and should not be supplied."
        (lambda (elt)
          (if (funcall pred elt) (throw 'match i))
          (setq i (- i 1)))
-       (reverse sequence)))
-    i))
+       (reverse sequence))
+      nil)))
 
 (defun org-real--parse-url (str)
   "Parse STR into a list of plists.
