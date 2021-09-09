@@ -576,7 +576,7 @@ OFFSET is the starting line to start insertion."
                                 (+ total (car org-real--margin) width))
                               column-widths
                               (* -1 (car org-real--margin)))))
-        (if (> width children-width)
+        (if (> width (+ (* 2 (car org-real--margin)) children-width))
             width
           (+ base-width children-width))))))
 
