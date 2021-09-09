@@ -9,6 +9,7 @@ package:
     - curl -fsSL https://raw.github.com/doublep/eldev/master/webinstall/eldev | sh
   script:
     - /root/.eldev/bin/eldev -dtT lint
+    - /root/.eldev/bin/eldev -dtT compile
     - /root/.eldev/bin/eldev -dtT package
     - /root/.eldev/bin/eldev -dtT md5
   artifacts:
