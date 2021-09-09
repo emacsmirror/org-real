@@ -169,7 +169,7 @@ Returns a list of plists with a :name property and optionally a
                               (plist-put container :rel rel)
                             container)))
                       tokens)))
-    (add-to-list 'containers (list :name host))))
+    (push (list :name host) containers)))
 
 (defun org-real--parse-buffer ()
   "Parse all real links in the current buffer."
@@ -463,7 +463,6 @@ describing where BOX is."
         (buffer (get-buffer-create "Org Real")))
     (with-current-buffer buffer
       (erase-buffer)
-      (goto-line 0)
       (toggle-truncate-lines t)
       (if containers (org-real--pp-text containers))
       (let ((offset (- (line-number-at-pos)
@@ -510,12 +509,11 @@ OFFSET is the starting line to start insertion."
                (width (org-real--get-width box))
                (height (org-real--get-height box))
                (name (oref box :name))
-               (children (oref box :children))
                (dashed (oref box :behind))
                (align-bottom (oref box :in-front))
                (primary (oref box :primary)))
           (cl-flet ((draw (coords str &optional primary)
-                       (goto-line (car coords))
+                       (forward-line (- (car coords) (line-number-at-pos)))
                        (move-to-column (cdr coords) t)
                        (if primary
                            (put-text-property 0 (length str) 'face 'org-real-primary
@@ -555,11 +553,8 @@ OFFSET is the starting line to start insertion."
          (children (oref box :children)))
     (if (not children)
         width
-      (let* ((column-indices (seq-reduce
-                              (lambda (columns child)
-                                (add-to-list 'columns (oref child :x-order)))
-                              children
-                              '()))
+      (let* ((column-indices (delete-duplicates
+                              (mapcar (lambda (child) (oref child :x-order)) children)))
              (columns (mapcar
                        (lambda (c)
                          (seq-filter
@@ -592,11 +587,8 @@ OFFSET is the starting line to start insertion."
          (children (oref box :children)))
     (if (not children)
         height
-      (let* ((row-indices (seq-reduce
-                           (lambda (rows child)
-                             (add-to-list 'rows (oref child :y-order)))
-                           children
-                           '()))
+      (let* ((row-indices (delete-duplicates
+                           (mapcar (lambda (child) (oref child :y-order)) children)))
              (rows (mapcar
                     (lambda (r)
                       (seq-filter
@@ -651,8 +643,7 @@ OFFSET is the starting line to start insertion."
   "Get the left column index of BOX."
   (if (not (slot-boundp box :parent))
       0
-    (let* ((offset (+ 2 (* 2 (car org-real--padding)) (car org-real--margin)))
-           (parent (oref box :parent))
+    (let* ((parent (oref box :parent))
            (left (+ 1
                     (car org-real--padding)
                     (org-real--get-left parent)))
