@@ -7,6 +7,10 @@ Keep track of real things as org links.
   :straight (org-real :type git :host gitlab :repo "tygrdev/org-real"))
 #+end_src
 
+*OR*
+
+[[https://gitlab.com/tygrdev/org-real/-/releases][Download the latest release]]
+
 * Status *ALPHA*
   - TODO Ask to replace all occurences after editing a link
 
