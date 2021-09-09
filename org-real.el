@@ -224,11 +224,9 @@ If EXCLUDE-CHILDREN, only retrieve sibling boxes."
       (if (= 0 (length boxes))
           (org-real--box)
         (car boxes))
-    (let ((world (org-real--box))
-          box)
+    (let ((world (org-real--box)))
       (while boxes
-        (setq box (pop boxes))
-        (org-real--merge-into box world))
+        (org-real--merge-into (pop boxes) world))
       world)))
 
 (defun org-real--expand (box)
