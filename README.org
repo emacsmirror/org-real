@@ -7,9 +7,7 @@ Keep track of real things as org links.
   :straight (org-real :type git :host gitlab :repo "tygrdev/org-real"))
 #+end_src
 
-* Status *PARTIALLY WORKING*
-  - TODO Allow things to have multiple children with the same preposition
-  - TODO =org-real-world= flex layout sometimes draws over existing boxes
+* Status *ALPHA*
   - TODO Ask to replace all occurences after editing a link
 
 * Usage
@@ -78,7 +76,7 @@ Keep track of real things as org links.
 
    [[file:demo/open-link.gif]]
 
-** =org-real-world= (expirimental)
+** =org-real-world=
    
    To view all real links in the current buffer in a combined diagram,
    use the interactive function =org-real-world=

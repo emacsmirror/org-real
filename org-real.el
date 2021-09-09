@@ -557,52 +557,60 @@ OFFSET is the starting line to start insertion."
          (children (oref box :children)))
     (if (not children)
         width
-      (let ((rows '()))
-        (mapc
-         (lambda (child)
-           (add-to-list 'rows (oref child :y-order)))
-         children)
-        (let ((child-widths (mapcar
-                             (lambda (row)
-                               (+ base-width
-                                  (seq-reduce
-                                   (lambda (sum child) (+ sum
-                                                          (car org-real--padding)
-                                                          (org-real--get-width child)))
-                                   (seq-filter
-                                    (lambda (child) (= row (oref child :y-order)))
-                                    children)
-                                   (* -1 (car org-real--padding)))))
-                             rows)))
-          (apply 'max width child-widths))))))
+      (let* ((column-indices (seq-reduce
+                              (lambda (columns child)
+                                (add-to-list 'columns (oref child :x-order)))
+                              children
+                              '()))
+             (columns (mapcar
+                       (lambda (c)
+                         (seq-filter
+                          (lambda (child)
+                            (= c (oref child :x-order)))
+                          children))
+                       column-indices))
+             (column-widths (mapcar
+                             (lambda (column)
+                               (apply 'max (mapcar 'org-real--get-width column)))
+                             columns))
+             (children-width (seq-reduce
+                              (lambda (total width)
+                                (+ total (car org-real--margin) width))
+                              column-widths
+                              (* -1 (car org-real--margin)))))
+        (if (> width children-width)
+            width
+          (+ base-width children-width))))))
 
 (defun org-real--get-height (box)
   "Get the height of BOX."
-  (let ((height (+ (if (oref box :in-front)
-                       (* -1 (cdr org-real--margin))
-                     0)
-                   2 ; box walls
-                   (* 2 (cdr org-real--padding))
-                   (cdr org-real--margin)))
-        (children (oref box :children))
-        (in-front (oref box :in-front)))
+  (let* ((in-front (oref box :in-front))
+         (height (+ (if in-front
+                        (* -1 (cdr org-real--margin))
+                      0)
+                    2 ; box walls
+                    (* 2 (cdr org-real--padding))
+                    (cdr org-real--margin)))
+         (children (oref box :children)))
     (if (not children)
         height
-      (let ((columns '()))
-        (mapc
-         (lambda (child) (add-to-list 'columns (oref child :x-order)))
-         children)
-        (let ((child-heights (mapcar
-                              (lambda (col)
-                                (+ height
-                                   (seq-reduce
-                                    (lambda (sum child) (+ sum (org-real--get-height child)))
-                                    (seq-filter
-                                     (lambda (child) (= col (oref child :x-order)))
-                                     children)
-                                    0)))
-                              columns)))
-          (apply 'max height child-heights))))))
+      (let* ((row-indices (seq-reduce
+                           (lambda (rows child)
+                             (add-to-list 'rows (oref child :y-order)))
+                           children
+                           '()))
+             (rows (mapcar
+                    (lambda (r)
+                      (seq-filter
+                       (lambda (child)
+                         (= r (oref child :y-order)))
+                       children))
+                    row-indices))
+             (row-heights (mapcar
+                           (lambda (row)
+                             (apply 'max (mapcar 'org-real--get-height row)))
+                           rows)))
+        (+ height (seq-reduce '+ row-heights 0))))))
 
 (defun org-real--get-top (box)
   "Get the top row index of BOX."
@@ -623,10 +631,18 @@ OFFSET is the starting line to start insertion."
                                                child
                                              max))
                                          above
-                                         (org-real--box :y-order -9999)))))
+                                         (org-real--box :y-order -9999))))
+             (above-height (and directly-above (apply 'max
+                                                      (mapcar
+                                                       'org-real--get-height
+                                                       (seq-filter
+                                                        (lambda (child)
+                                                          (= (oref directly-above :y-order)
+                                                             (oref child :y-order)))
+                                                        (oref parent :children)))))))
         (if directly-above
             (+ (org-real--get-top directly-above)
-               (org-real--get-height directly-above))
+               above-height)
           (if (and (slot-boundp box :rel)
                    (or (string= "to the left of" (oref box :rel))
                        (string= "to the right of" (oref box :rel))))
