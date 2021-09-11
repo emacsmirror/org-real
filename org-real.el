@@ -1,7 +1,7 @@
 ;;; org-real.el --- Create org-mode links to real things -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 0.0.1
+;; Version: 0.1.0
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
