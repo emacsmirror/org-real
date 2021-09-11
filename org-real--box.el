@@ -1,12 +1,22 @@
-;;; org-real.el --- Create org-mode links to real things -*- lexical-binding: t -*-
+;;; org-real--box.el --- Create org-mode links to real things -*- lexical-binding: t -*-
+
+;; Author: Tyler Grinn <tylergrinn@gmail.com>
+;; Version: 0.1.0
+;; File: org-real.el
+;; Package-Requires: ((emacs "26.1"))
+;; Keywords: tools
+;; URL: https://gitlab.com/tygrdev/org-real
 
 ;;; Commentary:
 
 ;; Box class definition and related methods
 
+;;; Code:
+
 ;;;; Patch! 0.0.1 -> 0.1.0+
 ;;;; Will be removed in version 1.0.0+
 
+(and (fboundp 'org-real--merge) (fmakunbound 'org-real--merge))
 (and (fboundp 'org-real--map-immediate) (fmakunbound 'org-real--map-immediate))
 (and (fboundp 'org-real--next) (fmakunbound 'org-real--next))
 (and (fboundp 'org-real--merge-into) (fmakunbound 'org-real--merge-into))
@@ -24,12 +34,8 @@
 (require 'eieio)
 (require 'cl-lib)
 
-;;;; Class definitions
 
-;; Define empty class for use in collection, redefine afterwards
-;; (defclass org-real--box ()
-  ;; nil
-  ;; "A representation of a box in 3D space.")
+;;;; Class definitions
 
 (defclass org-real--box-collection ()
   ((box :initarg :box
@@ -68,14 +74,6 @@
   "A representation of a box in 3D space.")
 
 
-;;;; Constants
-
-(defvar org-real--padding '(2 . 1)
-  "Padding used when displaying a real link.")
-
-(defvar org-real--margin '(2 . 1)
-  "Margin used when displaying a real link.")
-
 ;;;; Exports
 
 (cl-defmethod org-real--make-instance ((_ (subclass org-real--box)) containers)
@@ -93,7 +91,7 @@ property and optionally a :rel property."
         (org-real--make-instance-helper containers world base))
     world))
 
-(defun org-real--merge (boxes)
+(cl-defmethod org-real--merge (boxes)
   "Merge BOXES into a single box."
   (if (< (length boxes) 2)
       (if (= 0 (length boxes))
@@ -128,12 +126,12 @@ OFFSET is the starting line to start insertion."
               (draw (cons top left)
                     (concat "┌" (make-string (- width 2) (if dashed #x254c #x2500)) "┐"))
               (if align-bottom
-                  (draw (cons (+ top height -1 (cdr org-real--margin)) left)
+                  (draw (cons (+ top height) left)
                         (concat "┴" (make-string (- width 2) (if dashed #x254c #x2500)) "┴"))
                 (draw (cons (+ top height -1) left)
                       (concat "└" (make-string (- width 2) (if dashed #x254c #x2500)) "┘")))
-              (draw (cons (+ top 1 (cdr org-real--padding))
-                          (+ left 1 (car org-real--padding)))
+              (draw (cons (+ top 1 (cdr org-real-padding))
+                          (+ left 1 (car org-real-padding)))
                     name
                     primary)
               (let ((r (+ top 1))
@@ -150,7 +148,7 @@ OFFSET is the starting line to start insertion."
 (cl-defmethod org-real--get-width ((box org-real--box))
   "Get the width of BOX."
   (let* ((base-width (+ 2 ; box walls
-                        (* 2 (car org-real--padding))))
+                        (* 2 (car org-real-padding))))
          (width (+ base-width
                    (if (slot-boundp box :name)
                        (with-slots (name) box (length name))
@@ -174,10 +172,10 @@ OFFSET is the starting line to start insertion."
                              columns))
              (children-width (seq-reduce
                               (lambda (total width)
-                                (+ total (car org-real--margin) width))
+                                (+ total (car org-real-margin) width))
                               column-widths
-                              (* -1 (car org-real--margin)))))
-        (if (> width (+ (* 2 (car org-real--margin)) children-width))
+                              (* -1 (car org-real-margin)))))
+        (if (> width (+ (* 2 (car org-real-margin)) children-width))
             width
           (+ base-width children-width))))))
 
@@ -185,11 +183,11 @@ OFFSET is the starting line to start insertion."
   "Get the height of BOX."
   (let* ((in-front (with-slots (in-front) box in-front))
          (height (+ (if in-front
-                        (* -1 (cdr org-real--margin))
+                        (* -1 (cdr org-real-margin))
                       0)
-                    2 ; box walls
-                    (* 2 (cdr org-real--padding))
-                    (cdr org-real--margin)))
+                    3 ; box walls + text
+                    (cdr org-real-padding)
+                    (cdr org-real-margin)))
          (children (with-slots (children) box (org-real--get-all children))))
     (if (not children)
         height
@@ -214,7 +212,7 @@ OFFSET is the starting line to start insertion."
   (if (not (slot-boundp box :parent))
       0
     (with-slots (parent x-order y-order) box
-      (let* ((offset (+ 1 (* 2 (cdr org-real--padding)) (cdr org-real--margin)))
+      (let* ((offset (+ 2 (cdr org-real-padding) (cdr org-real-margin)))
              (top (+ offset (org-real--get-top parent)))
              (above (seq-filter
                      (lambda (child)
@@ -256,7 +254,7 @@ OFFSET is the starting line to start insertion."
       0
     (with-slots (parent x-order y-order) box
       (let* ((left (+ 1
-                      (car org-real--padding)
+                      (car org-real-padding)
                       (org-real--get-left parent)))
              (to-the-left (seq-filter
                            (lambda (child)
@@ -277,7 +275,7 @@ OFFSET is the starting line to start insertion."
         (if directly-left
             (+ (org-real--get-left directly-left)
                (org-real--get-width directly-left)
-               (car org-real--margin))
+               (car org-real-margin))
           (with-slots (rel rel-box) box
             (if (and (slot-boundp box :rel)
                      (or (string= "above" rel)
@@ -295,7 +293,7 @@ OFFSET is the starting line to start insertion."
 
 (cl-defmethod org-real--add-to-list ((collection org-real--box-collection)
                                      (box org-real--box))
-  "Add BOX to COLLECTION and return new COLLECTION"
+  "Add BOX to COLLECTION and return new COLLECTION."
   (if (slot-boundp collection :box)
       (org-real--box-collection
        :box box
@@ -553,3 +551,5 @@ that the width of WORLD is kept below 80 characters if possible."
 
 
 (provide 'org-real--box)
+
+;;; org-real--box.el ends here
