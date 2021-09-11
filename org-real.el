@@ -444,10 +444,84 @@ ARGS are the arguments passed to `org-insert-link'."
   "Advise `org-insert-link' to advise `read-string' during editing of a link.
 
 ARGS are the arguments passed to `org-insert-link'."
-  (advice-remove 'read-string #'org-real--read-string-advice))
+  (advice-remove 'read-string #'org-real--read-string-advice)
+  (org-real--apply))
+
 
 (advice-add 'org-insert-link :before #'org-real--insert-link-before)
 (advice-add 'org-insert-link :after #'org-real--insert-link-after)
+
+(defun org-real--apply ()
+  "Apply any changes to the current buffer from the last inserted real link."
+  (let (new-link new-desc replace-all)
+    (cond
+     ((org-in-regexp org-link-bracket-re 1)
+      (setq new-link (match-string-no-properties 1)))
+     ((org-in-regexp org-link-plain-re)
+      (setq new-link (org-unbracket-string "<" ">" (match-string 0)))))
+    (when (and new-link
+               (string= "real" (ignore-errors (url-type (url-generic-parse-url new-link)))))
+      (let ((new-containers (reverse (org-real--parse-url new-link))))
+        (while new-containers
+          (let ((primary (plist-get (car new-containers) :name))
+                (changes '())
+                old-containers)
+            (org-element-map (org-element-parse-buffer) 'link
+              (lambda (old-link)
+                (when (string= (org-element-property :type old-link) "real")
+                  (setq old-containers (reverse (org-real--parse-url
+                                                 (org-element-property :raw-link old-link))))
+                  
+                  (when-let* ((new-index 0)
+                              (old-index (seq-position
+                                          old-containers
+                                          primary
+                                          (lambda (a b) (string= (plist-get a :name) b))))
+                              (begin (org-element-property :begin old-link))
+                              (end (org-element-property :end old-link))
+                              (replace-link (org-real--to-link
+                                             (reverse
+                                              (append (cl-subseq old-containers 0 old-index)
+                                                      new-containers))))
+                              (old-desc ""))
+                    (when (catch 'conflict
+                            (if (not (= (length new-containers) (- (length old-containers) old-index)))
+                                (throw 'conflict t))
+                            (while (< new-index (length new-containers))
+                              (if (or (not (string= (plist-get (nth new-index new-containers) :name)
+                                                    (plist-get (nth old-index old-containers) :name)))
+                                      (not (string= (plist-get (nth new-index new-containers) :rel)
+                                                    (plist-get (nth old-index old-containers) :rel))))
+                                  (throw 'conflict t))
+                              (setq new-index (+ 1 new-index))
+                              (setq old-index (+ 1 old-index)))
+                            nil)
+                      (goto-char begin)
+                      (if (org-in-regexp org-link-bracket-re 1)
+                          (setq old-desc (when (match-end 2) (match-string-no-properties 2))))
+                      (push
+                       `(lambda ()
+                          (delete-region ,begin ,end)
+                          (goto-char ,begin)
+                          (insert (org-link-make-string ,replace-link ,old-desc)))
+                       changes))))))
+            (when (and changes
+                       (or replace-all (let ((response
+                                              (read-char-choice
+                                               (concat
+                                                "Replace all occurrences of "
+                                                primary
+                                                " in current buffer? y/n/a ")
+                                               '(?y ?Y ?n ?N ?a ?A)
+                                               t)))
+                                         (cond
+                                          ((or (= response ?y) (= response ?Y)) t)
+                                          ((or (= response ?n) (= response ?N)) nil)
+                                          ((or (= response ?a) (= response ?A))
+                                           (setq replace-all t))))))
+              (mapc 'funcall changes)))
+          (pop new-containers)))))
+  (message nil))
 
 ;;;; Pretty printing
 
