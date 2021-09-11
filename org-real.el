@@ -1,4 +1,4 @@
-;;; org-real.el --- Create org-mode links to real things -*- lexical-binding: t -*-
+;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
 ;; Version: 0.1.0
@@ -335,8 +335,8 @@ describing where BOX is."
       (toggle-truncate-lines t)
       (if containers (org-real--pp-text containers))
       (let ((offset (- (line-number-at-pos)
-                       (cdr org-real--margin)
-                       (* 2 (cdr org-real--padding)))))
+                       (cdr org-real-margin)
+                       (* 2 (cdr org-real-padding)))))
         (dotimes (_ (+ top height)) (insert (concat (make-string width ?\s) "\n")))
         (org-real--draw box offset)
         (special-mode)))
@@ -348,8 +348,8 @@ describing where BOX is."
   (let* ((reversed (reverse containers))
          (container (pop reversed))
          (primary-name (plist-get container :name)))
-    (dotimes (_ (cdr org-real--padding)) (insert "\n"))
-    (insert (make-string (car org-real--padding) ?\s))
+    (dotimes (_ (cdr org-real-padding)) (insert "\n"))
+    (insert (make-string (car org-real-padding) ?\s))
     (insert "The ")
     (put-text-property 0 (length primary-name) 'face 'org-real-primary
                        primary-name)

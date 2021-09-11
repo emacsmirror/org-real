@@ -1,8 +1,8 @@
-;;; org-real--box.el --- Create org-mode links to real things -*- lexical-binding: t -*-
+;;; org-real--box.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
 ;; Version: 0.1.0
-;; File: org-real.el
+;; File: org-real--box.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
 ;; URL: https://gitlab.com/tygrdev/org-real

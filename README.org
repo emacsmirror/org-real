@@ -1,6 +1,6 @@
 #+TITLE: Org Real
 
-Keep track of real things as org links.
+Keep track of real things as org-mode links.
 
 #+begin_src emacs-lisp
 (use-package org-real
