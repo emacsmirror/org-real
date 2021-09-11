@@ -34,6 +34,11 @@
 (require 'eieio)
 (require 'cl-lib)
 
+;;;; Variables from org-real.el
+
+(eval-when-compile
+  (defvar org-real-padding)
+  (defvar org-real-margin))
 
 ;;;; Class definitions
 
