@@ -24,6 +24,24 @@
 
 (require 'org-real--box)
 
+;;;; Customization variables
+
+(defcustom org-real-margin '(2 . 1)
+  "Margin to be used when displaying boxes.
+
+The first number is the horizontal margin, second is the vertical
+margin"
+  :type 'cons
+  :group 'org-real)
+
+(defcustom org-real-padding '(2 . 1)
+  "Padding to be used when displaying boxes.
+
+The first number is the horizontal padding, second is the
+vertical padding"
+  :type 'cons
+  :group 'org-real)
+
 ;;;; Faces
 
 (defface org-real-primary
@@ -50,6 +68,28 @@
          (setq i (- i 1)))
        (reverse sequence))
       nil)))
+
+(defun org-real--link-make-string (link &optional description)
+  "Make a bracket link, consisting of LINK and DESCRIPTION.
+LINK is escaped with backslashes for inclusion in buffer."
+  (let* ((zero-width-space (string ?\x200B))
+	 (description
+	  (and (org-string-nw-p description)
+	       ;; Description cannot contain two consecutive square
+	       ;; brackets, or end with a square bracket.  To prevent
+	       ;; this, insert a zero width space character between
+	       ;; the brackets, or at the end of the description.
+	       (replace-regexp-in-string
+		"\\(]\\)\\(]\\)"
+		(concat "\\1" zero-width-space "\\2")
+		(replace-regexp-in-string "]\\'"
+					  (concat "\\&" zero-width-space)
+					  (org-trim description))))))
+    (if (not (org-string-nw-p link)) description
+      (format "[[%s]%s]"
+	      (org-link-escape link)
+	      (if description (format "[%s]" description) "")))))
+
 
 (defun org-real--parse-url (str)
   "Parse STR into a list of plists.
@@ -205,7 +245,7 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
 (advice-add 'org-insert-link :around #'org-real--maybe-edit-link)
 
 (defun org-real--apply (&rest _)
-  "Apply any changes to the current buffer if last inserted link is real."
+  "Apply any change to the current buffer if last inserted link is real."
   (let (new-link replace-all)
     (cond
      ((org-in-regexp org-link-bracket-re 1)
@@ -256,7 +296,7 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
                        `(lambda ()
                           (delete-region ,begin ,end)
                           (goto-char ,begin)
-                          (insert (org-link-make-string ,replace-link ,old-desc)))
+                          (insert (org-real--link-make-string ,replace-link ,old-desc)))
                        changes))))))
             (when (and changes
                        (or replace-all (let ((response
