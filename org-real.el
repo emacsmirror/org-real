@@ -19,9 +19,8 @@
 
 ;;;; Requirements
 
-(require 'eieio)
-(require 'org)
-(require 'cl-lib)
+(require 'org-element)
+(require 'cl-extra)
 
 (require 'org-real--box)
 
@@ -38,12 +37,6 @@
 (defconst org-real-prepositions
   '("in" "on" "behind" "in front of" "above" "below" "to the left of" "to the right of")
   "List of available prepositions for things.")
-
-(defvar org-real--padding '(2 . 1)
-  "Padding used when displaying a real link.")
-
-(defvar org-real--margin '(2 . 1)
-  "Margin used when displaying a real link.")
 
 ;;;; Utility expressions
 
@@ -112,8 +105,10 @@ Returns a list of plists with a :name property and optionally a
   (interactive)
   (org-real--pp
    (org-real--merge
-    (mapcar 'org-real--create-box
-            (org-real--parse-buffer)))))
+    (mapcar
+     (lambda (containers)
+       (org-real--make-instance 'org-real--box containers))
+     (org-real--parse-buffer)))))
 
 ;;;; `org-insert-link' configuration
 
@@ -121,12 +116,10 @@ Returns a list of plists with a :name property and optionally a
                          :follow #'org-real-follow
                          :complete #'org-real-complete)
 
-(defun org-real-follow (url &rest args)
-  "Open a real link URL in a popup buffer.
-
-ARGS are ignored."
+(defun org-real-follow (url &rest _)
+  "Open a real link URL in a popup buffer."
   (let* ((containers (org-real--parse-url url))
-         (box (org-real--create-box (copy-tree containers))))
+         (box (org-real--make-instance 'org-real--box (copy-tree containers))))
     (org-real--pp box (copy-tree containers))))
 
 (defun org-real-complete (&optional existing)
@@ -137,7 +130,7 @@ ARGS are ignored."
                        (org-real--complete-thing "Thing: " container-matrix))))
     (catch 'confirm
       (while t
-        (org-real--pp (org-real--create-box containers) containers)
+        (org-real--pp (org-real--make-instance 'org-real--box containers) containers)
         (let ((response (read-event "RETURN    - Confirm\nBACKSPACE - Remove context\n+         - Add context")))
           (cond
            ((eq response 'return)
@@ -204,16 +197,16 @@ passed to it."
 ORIG is `org-insert-link', ARGS are the arguments passed to it."
   (advice-add 'read-string :around #'org-real--read-string-advice)
   (unwind-protect
-      (if (called-interactively-p)
+      (if (called-interactively-p 'any)
           (call-interactively orig)
         (apply orig args))
     (advice-remove 'read-string #'org-real--read-string-advice)))
 
 (advice-add 'org-insert-link :around #'org-real--maybe-edit-link)
 
-(defun org-real--apply (&rest args)
-  "Apply any changes to the current buffer from the last inserted real link."
-  (let (new-link new-desc replace-all)
+(defun org-real--apply (&rest _)
+  "Apply any changes to the current buffer if last inserted link is real."
+  (let (new-link replace-all)
     (cond
      ((org-in-regexp org-link-bracket-re 1)
       (setq new-link (match-string-no-properties 1)))
