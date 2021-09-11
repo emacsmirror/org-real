@@ -425,6 +425,8 @@ matching the one returned from `completing-read'."
         existing-containers
       `((:name ,result)))))
 
+;;; Hooks
+
 (defun org-real--read-string-advice (orig prompt link &rest args)
   "Advise `read-string' during `org-insert-link' to use custom completion.
 
@@ -434,24 +436,20 @@ passed to it."
       (org-real-complete link)
     (apply orig prompt link args)))
 
-(defun org-real--insert-link-before (&rest args)
+(defun org-real--maybe-edit-link (orig &rest args)
   "Advise `org-insert-link' to advise `read-string' during editing of a link.
 
 ARGS are the arguments passed to `org-insert-link'."
-  (advice-add 'read-string :around #'org-real--read-string-advice))
+  (advice-add 'read-string :around #'org-real--read-string-advice)
+  (unwind-protect
+      (if (called-interactively-p)
+          (call-interactively orig)
+        (apply orig args))
+    (advice-remove 'read-string #'org-real--read-string-advice)))
 
-(defun org-real--insert-link-after (&rest args)
-  "Advise `org-insert-link' to advise `read-string' during editing of a link.
+(advice-add 'org-insert-link :around #'org-real--maybe-edit-link)
 
-ARGS are the arguments passed to `org-insert-link'."
-  (advice-remove 'read-string #'org-real--read-string-advice)
-  (org-real--apply))
-
-
-(advice-add 'org-insert-link :before #'org-real--insert-link-before)
-(advice-add 'org-insert-link :after #'org-real--insert-link-after)
-
-(defun org-real--apply ()
+(defun org-real--apply (&rest args)
   "Apply any changes to the current buffer from the last inserted real link."
   (let (new-link new-desc replace-all)
     (cond
@@ -522,6 +520,8 @@ ARGS are the arguments passed to `org-insert-link'."
               (mapc 'funcall changes)))
           (pop new-containers)))))
   (message nil))
+
+(advice-add 'org-insert-link :after #'org-real--apply)
 
 ;;;; Pretty printing
 
