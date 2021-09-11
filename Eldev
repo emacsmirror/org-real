@@ -1,7 +1,7 @@
 ; -*- mode: emacs-lisp; lexical-binding: t -*-
 
 (eldev-defcommand
- md5 (&rest parameters)
+ org_real-md5 (&rest parameters)
  "Create md5 checksum of tar files in dist folder"
  (mapc
   (lambda (file)
