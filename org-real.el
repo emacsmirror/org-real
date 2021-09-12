@@ -23,8 +23,6 @@
 (require 'org-element)
 (require 'cl-lib)
 
-(require 'org-real-box)
-
 ;;;; Customization variables
 
 (defcustom org-real-margin '(2 . 1)
