@@ -78,9 +78,9 @@ Keep track of real things as org-mode links.
    
 ** Opening links
 
-   To open a link, place the cursor within the link and press =C-c
-   C-o=. This will display a popup buffer showing the location of the
-   thing described by the link.
+   To open a real link, place the cursor within the link and press
+   =C-c C-o=. This will display a popup buffer showing the location of
+   the thing described by the link.
 
    [[file:demo/open-link.gif]]
 
