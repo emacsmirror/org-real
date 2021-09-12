@@ -1,8 +1,8 @@
-;;; org-real--box.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
+;;; org-real-box.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
 ;; Version: 0.1.0
-;; File: org-real--box.el
+;; File: org-real-box.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
 ;; URL: https://gitlab.com/tygrdev/org-real
@@ -42,20 +42,20 @@
 
 ;;;; Class definitions
 
-(defclass org-real--box-collection ()
+(defclass org-real-box-collection ()
   ((box :initarg :box
-        :type org-real--box)
+        :type org-real-box)
    (next :initarg :next
-         :type org-real--box-collection))
-  "A collection of `org-real--box'es.")
+         :type org-real-box-collection))
+  "A collection of `org-real-box'es.")
 
-(defclass org-real--box ()
+(defclass org-real-box ()
   ((name :initarg :name
          :type string)
    (rel :initarg :rel
         :type string)
    (rel-box :initarg :rel-box
-            :type org-real--box)
+            :type org-real-box)
    (x-order :initarg :x-order
             :initform 0
             :type number)
@@ -69,10 +69,10 @@
            :initform nil
            :type boolean)
    (parent :initarg :parent
-           :type org-real--box)
+           :type org-real-box)
    (children :initarg :children
-             :initform (org-real--box-collection)
-             :type org-real--box-collection)
+             :initform (org-real-box-collection)
+             :type org-real-box-collection)
    (primary :initarg :primary
             :initform nil
             :type boolean))
@@ -81,14 +81,14 @@
 
 ;;;; Exports
 
-(cl-defmethod org-real--make-instance ((_ (subclass org-real--box)) containers)
-  "Create an instance of `org-real--box' from CONTAINERS.
+(cl-defmethod org-real--make-instance ((_ (subclass org-real-box)) containers)
+  "Create an instance of `org-real-box' from CONTAINERS.
 
 CONTAINERS is a list of plists containing at least a :name
 property and optionally a :rel property."
-  (when-let* ((world (org-real--box))
+  (when-let* ((world (org-real-box))
               (base-container (pop containers))
-              (base (org-real--box :name (plist-get base-container :name))))
+              (base (org-real-box :name (plist-get base-container :name))))
     (oset base :parent world)
     (with-slots (children) world
       (setq children (org-real--add-to-list children base)))
@@ -100,16 +100,16 @@ property and optionally a :rel property."
   "Merge BOXES into a single box."
   (if (< (length boxes) 2)
       (if (= 0 (length boxes))
-          (org-real--box)
+          (org-real-box)
         (car boxes))
-    (let ((world (org-real--box)))
+    (let ((world (org-real-box)))
       (while boxes
         (org-real--merge-into (pop boxes) world))
       world)))
 
 ;;;; Drawing
 
-(cl-defmethod org-real--draw ((box org-real--box) offset)
+(cl-defmethod org-real--draw ((box org-real-box) offset)
   "Insert an ascii drawing of BOX into the current buffer.
 
 OFFSET is the starting line to start insertion."
@@ -150,7 +150,7 @@ OFFSET is the starting line to start insertion."
      (lambda (child) (org-real--draw child offset))
      children)))
 
-(cl-defmethod org-real--get-width ((box org-real--box))
+(cl-defmethod org-real--get-width ((box org-real-box))
   "Get the width of BOX."
   (let* ((base-width (+ 2 ; box walls
                         (* 2 (car org-real-padding))))
@@ -184,7 +184,7 @@ OFFSET is the starting line to start insertion."
             width
           (+ base-width children-width))))))
 
-(cl-defmethod org-real--get-height ((box org-real--box))
+(cl-defmethod org-real--get-height ((box org-real-box))
   "Get the height of BOX."
   (let* ((in-front (with-slots (in-front) box in-front))
          (height (+ (if in-front
@@ -212,7 +212,7 @@ OFFSET is the starting line to start insertion."
                            rows)))
         (+ height (seq-reduce '+ row-heights 0))))))
 
-(cl-defmethod org-real--get-top ((box org-real--box))
+(cl-defmethod org-real--get-top ((box org-real-box))
   "Get the top row index of BOX."
   (if (not (slot-boundp box :parent))
       0
@@ -233,7 +233,7 @@ OFFSET is the starting line to start insertion."
                                                    child
                                                  max))))
                                          above
-                                         (org-real--box :y-order -9999))))
+                                         (org-real-box :y-order -9999))))
              (above-height (and directly-above (apply 'max
                                                       (mapcar
                                                        'org-real--get-height
@@ -253,7 +253,7 @@ OFFSET is the starting line to start insertion."
                 (org-real--get-top rel-box)
               top)))))))
 
-(cl-defmethod org-real--get-left ((box org-real--box))
+(cl-defmethod org-real--get-left ((box org-real-box))
   "Get the left column index of BOX."
   (if (not (slot-boundp box :parent))
       0
@@ -276,7 +276,7 @@ OFFSET is the starting line to start insertion."
                                             child
                                           max))))
                                   to-the-left
-                                  (org-real--box :x-order -9999)))))
+                                  (org-real-box :x-order -9999)))))
         (if directly-left
             (+ (org-real--get-left directly-left)
                (org-real--get-width directly-left)
@@ -290,29 +290,29 @@ OFFSET is the starting line to start insertion."
 
 ;;;; Utility expressions
 
-(cl-defmethod org-real--get-all ((collection org-real--box-collection))
+(cl-defmethod org-real--get-all ((collection org-real-box-collection))
   "Get all boxes in COLLECTION as a sequence."
   (with-slots (box next) collection
     (append (if (slot-boundp collection :box) (list box))
             (if (slot-boundp collection :next) (org-real--get-all next)))))
 
-(cl-defmethod org-real--add-to-list ((collection org-real--box-collection)
-                                     (box org-real--box))
+(cl-defmethod org-real--add-to-list ((collection org-real-box-collection)
+                                     (box org-real-box))
   "Add BOX to COLLECTION and return new COLLECTION."
   (if (slot-boundp collection :box)
-      (org-real--box-collection
+      (org-real-box-collection
        :box box
        :next collection)
     (oset collection :box box)
     collection))
 
-(cl-defmethod org-real--make-instance-helper (containers parent (prev org-real--box))
+(cl-defmethod org-real--make-instance-helper (containers parent (prev org-real-box))
   "Help create a 3D representation of CONTAINERS.
 
 PREV must already existing in PARENT."
   (let* ((container (pop containers))
          (rel (plist-get container :rel))
-         (box (org-real--box :name (plist-get container :name))))
+         (box (org-real-box :name (plist-get container :name))))
     (when prev
       (oset box :rel (plist-get container :rel))
       (oset box :rel-box prev)
@@ -374,7 +374,7 @@ PREV must already existing in PARENT."
           (org-real--make-instance-helper containers parent box)
         (oset box :primary t)))))
 
-(cl-defmethod org-real--map-immediate (fn (box org-real--box))
+(cl-defmethod org-real--map-immediate (fn (box org-real-box))
   "Map a function FN across all immediate relatives of BOX, including BOX.
 
 Any box with a :rel-box slot equivalent to BOX will be passed to
@@ -385,7 +385,7 @@ FN."
      (lambda (box) (org-real--map-immediate fn box))
      (org-real--next box t))))
 
-(cl-defmethod org-real--next ((box org-real--box) &optional exclude-children)
+(cl-defmethod org-real--next ((box org-real-box) &optional exclude-children)
   "Retrieve any boxes for which the :rel-box slot is BOX.
 
 If EXCLUDE-CHILDREN, only retrieve sibling boxes."
@@ -408,12 +408,12 @@ If EXCLUDE-CHILDREN, only retrieve sibling boxes."
                      (with-slots (name) box name))))
      relatives)))
 
-(cl-defmethod org-real--expand ((box org-real--box))
+(cl-defmethod org-real--expand ((box org-real-box))
   "Get a list of all boxes, including BOX, that are children of BOX."
   (with-slots (children) box
     (apply 'append (list box) (mapcar 'org-real--expand (org-real--get-all children)))))
 
-(cl-defmethod org-real--merge-into ((from org-real--box) (to org-real--box))
+(cl-defmethod org-real--merge-into ((from org-real-box) (to org-real-box))
   "Merge FROM box into TO box."
   (let ((from-boxes (reverse (org-real--expand from)))
         (to-boxes (reverse (org-real--expand to))))
@@ -431,9 +431,9 @@ If EXCLUDE-CHILDREN, only retrieve sibling boxes."
              from-boxes)
       (org-real--flex-add from to to))))
 
-(cl-defmethod org-real--add-matching ((box org-real--box)
-                                      (match org-real--box)
-                                      (world org-real--box))
+(cl-defmethod org-real--add-matching ((box org-real-box)
+                                      (match org-real-box)
+                                      (world org-real-box))
   "Add BOX to WORLD after finding a matching box MATCH already in WORLD.
 
 MATCH is used to set the :rel-box and :parent slots on children
@@ -509,9 +509,9 @@ of BOX."
            (org-real--add-matching next next world)))
       next-boxes))))
 
-(cl-defmethod org-real--flex-add ((box org-real--box)
-                                  (parent org-real--box)
-                                  (world org-real--box))
+(cl-defmethod org-real--flex-add ((box org-real-box)
+                                  (parent org-real-box)
+                                  (world org-real-box))
   "Add BOX to a PARENT box already existing in WORLD.
 
 This function ignores the :rel slot and adds BOX in such a way
@@ -538,7 +538,7 @@ that the width of WORLD is kept below 80 characters if possible."
                                          (lambda (sibling)
                                            (not (with-slots (in-front) sibling in-front)))
                                          siblings)
-                                        (org-real--box :y-order -9999)))))
+                                        (org-real-box :y-order -9999)))))
       (oset box :parent parent)
       (oset parent :children (org-real--add-to-list (with-slots (children) parent children) box))
       (when (and last-sibling (not (with-slots (in-front) box in-front)))
@@ -555,6 +555,6 @@ that the width of WORLD is kept below 80 characters if possible."
 
 
 
-(provide 'org-real--box)
+(provide 'org-real-box)
 
-;;; org-real--box.el ends here
+;;; org-real-box.el ends here
