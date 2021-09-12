@@ -1,7 +1,7 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 0.1.0
+;; Version: 0.1.1
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
@@ -16,6 +16,22 @@
 ;; current buffer.
 
 ;;; Code:
+
+;;;; Patch! 0.0.1 -> 0.1.0+
+;;;; Will be removed in version 1.0.0+
+
+(and (fboundp 'org-real--merge) (fmakunbound 'org-real--merge))
+(and (fboundp 'org-real--map-immediate) (fmakunbound 'org-real--map-immediate))
+(and (fboundp 'org-real--next) (fmakunbound 'org-real--next))
+(and (fboundp 'org-real--merge-into) (fmakunbound 'org-real--merge-into))
+(and (fboundp 'org-real--add-matching) (fmakunbound 'org-real--add-matching))
+(and (fboundp 'org-real--flex-add) (fmakunbound 'org-real--flex-add))
+(and (fboundp 'org-real--expand) (fmakunbound 'org-real--expand))
+(and (fboundp 'org-real--draw) (fmakunbound 'org-real--draw))
+(and (fboundp 'org-real--get-width) (fmakunbound 'org-real--get-width))
+(and (fboundp 'org-real--get-height) (fmakunbound 'org-real--get-height))
+(and (fboundp 'org-real--get-top) (fmakunbound 'org-real--get-top))
+(and (fboundp 'org-real--get-left) (fmakunbound 'org-real--get-left))
 
 ;;;; Requirements
 
