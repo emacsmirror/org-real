@@ -41,6 +41,10 @@
 
 ;;;; Customization variables
 
+(defgroup org-real nil
+  "Customization options for org-real"
+  :group 'applications)
+
 (defcustom org-real-margin '(2 . 1)
   "Margin to be used when displaying boxes.
 
