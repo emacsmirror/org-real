@@ -1,6 +1,6 @@
 #+TITLE: Org Real
 
-Keep track of real things as org links.
+Keep track of real things as org-mode links.
 
 #+begin_src emacs-lisp
 (use-package org-real
@@ -11,8 +11,8 @@ Keep track of real things as org links.
 
 [[https://gitlab.com/tygrdev/org-real/-/releases][Download the latest release]]
 
-* Status *ALPHA*
-  - TODO Ask to replace all occurences after editing a link
+* Status *BETA*
+  - TODO ERT tests
 
 * Usage
 ** Inserting a link
@@ -72,6 +72,10 @@ Keep track of real things as org links.
 
    [[file:demo/edit-link.gif]]
 
+   If any container in the new link does not match an existing
+   container in the buffer, org-real will prompt you to replace all
+   occurences of that thing with the new context and relationships.
+   
 ** Opening links
 
    To open a link, place the cursor within the link and press =C-c

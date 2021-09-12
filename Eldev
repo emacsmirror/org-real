@@ -1,12 +1,14 @@
 ; -*- mode: emacs-lisp; lexical-binding: t -*-
 
 (eldev-defcommand
- eventuel-md5 (&rest parameters)
+ org_real-md5 (&rest parameters)
  "Create md5 checksum of tar files in dist folder"
- (mapcar
+ (mapc
   (lambda (file)
     (write-region
      (secure-hash 'md5 file)
      nil
      (concat (file-name-sans-extension file) ".md5")))
-  (directory-files eldev-dist-dir t "\\.el\\'")))
+  (append
+   (directory-files eldev-dist-dir t "\\.tar\\'")
+   (directory-files eldev-dist-dir t "\\.el\\'"))))
