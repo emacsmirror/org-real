@@ -22,7 +22,7 @@
 (require 'org-element)
 (require 'cl-extra)
 
-(require 'org-real--box)
+(require 'org-real-box)
 
 ;;;; Customization variables
 
@@ -147,7 +147,7 @@ Returns a list of plists with a :name property and optionally a
    (org-real--merge
     (mapcar
      (lambda (containers)
-       (org-real--make-instance 'org-real--box containers))
+       (org-real--make-instance 'org-real-box containers))
      (org-real--parse-buffer)))))
 
 ;;;; `org-insert-link' configuration
@@ -159,7 +159,7 @@ Returns a list of plists with a :name property and optionally a
 (defun org-real-follow (url &rest _)
   "Open a real link URL in a popup buffer."
   (let* ((containers (org-real--parse-url url))
-         (box (org-real--make-instance 'org-real--box (copy-tree containers))))
+         (box (org-real--make-instance 'org-real-box (copy-tree containers))))
     (org-real--pp box (copy-tree containers))))
 
 (defun org-real-complete (&optional existing)
@@ -170,7 +170,7 @@ Returns a list of plists with a :name property and optionally a
                        (org-real--complete-thing "Thing: " container-matrix))))
     (catch 'confirm
       (while t
-        (org-real--pp (org-real--make-instance 'org-real--box containers) containers)
+        (org-real--pp (org-real--make-instance 'org-real-box containers) containers)
         (let ((response (read-event "RETURN    - Confirm\nBACKSPACE - Remove context\n+         - Add context")))
           (cond
            ((eq response 'return)
