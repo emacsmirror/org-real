@@ -250,7 +250,6 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
                 (when (string= (org-element-property :type old-link) "real")
                   (setq old-containers (reverse (org-real--parse-url
                                                  (org-element-property :raw-link old-link))))
-                  
                   (when-let* ((new-index 0)
                               (old-index (seq-position
                                           old-containers
@@ -639,7 +638,7 @@ PREV must already existing in PARENT."
                  (setq cur-y prev-y)
                  (setq cur-behind prev-behind)
                  (setq cur-in-front prev-in-front))))))
-    
+
     (if (and prev (member rel '("in" "on" "behind" "in front of")))
         (progn
           (oset box :parent prev)
@@ -788,7 +787,7 @@ of BOX."
              (setq next-y match-y)
              (setq next-behind match-behind)
              (setq next-in-front match-in-front)))
-             
+
            (oset next :rel-box match)
            (if (member rel '("in" "on" "behind" "in front of"))
                (org-real--flex-add next match world)
@@ -862,22 +861,22 @@ that the width of WORLD is kept below 80 characters if possible."
   "Make a bracket link, consisting of LINK and DESCRIPTION.
 LINK is escaped with backslashes for inclusion in buffer."
   (let* ((zero-width-space (string ?\x200B))
-	 (description
-	  (and (org-string-nw-p description)
-	       ;; Description cannot contain two consecutive square
-	       ;; brackets, or end with a square bracket.  To prevent
-	       ;; this, insert a zero width space character between
-	       ;; the brackets, or at the end of the description.
-	       (replace-regexp-in-string
-		"\\(]\\)\\(]\\)"
-		(concat "\\1" zero-width-space "\\2")
-		(replace-regexp-in-string "]\\'"
-					  (concat "\\&" zero-width-space)
-					  (org-trim description))))))
+   (description
+    (and (org-string-nw-p description)
+         ;; Description cannot contain two consecutive square
+         ;; brackets, or end with a square bracket.  To prevent
+         ;; this, insert a zero width space character between
+         ;; the brackets, or at the end of the description.
+         (replace-regexp-in-string
+    "\\(]\\)\\(]\\)"
+    (concat "\\1" zero-width-space "\\2")
+    (replace-regexp-in-string "]\\'"
+            (concat "\\&" zero-width-space)
+            (org-trim description))))))
     (if (not (org-string-nw-p link)) description
       (format "[[%s]%s]"
-	      (org-link-escape link)
-	      (if description (format "[%s]" description) "")))))
+        (org-link-escape link)
+        (if description (format "[%s]" description) "")))))
 
 
 (defun org-real--parse-url (str)
