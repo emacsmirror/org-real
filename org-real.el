@@ -345,7 +345,7 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
     (append (if (slot-boundp collection :box) (list box))
             (if (slot-boundp collection :next) (org-real--get-all next)))))
 
-(cl-defmethod org-real--add-to-list ((collection org-real-box-collection)
+(cl-defmethod org-real--push ((collection org-real-box-collection)
                                      (box org-real-box))
   "Add BOX to COLLECTION and return new COLLECTION."
   (if (slot-boundp collection :box)
@@ -365,7 +365,7 @@ property and optionally a :rel property."
               (base (org-real-box :name (plist-get base-container :name))))
     (oset base :parent world)
     (with-slots (children) world
-      (setq children (org-real--add-to-list children base)))
+      (setq children (org-real--push children base)))
     (if containers
         (org-real--make-instance-helper containers world base))
     world))
@@ -619,12 +619,14 @@ PREV must already existing in PARENT."
     (if (and prev (member rel '("in" "on" "behind" "in front of")))
         (progn
           (oset box :parent prev)
-          (oset prev :children (org-real--add-to-list (with-slots (children) prev children) box))
+          (with-slots (children) prev
+            (setq children (org-real--push children box)))
           (if containers
               (org-real--make-instance-helper containers prev box)
             (oset box :primary t)))
       (oset box :parent parent)
-      (oset parent :children (org-real--add-to-list (with-slots (children) parent children) box))
+      (with-slots (children) parent
+        (setq children (org-real--push children box)))
       (if containers
           (org-real--make-instance-helper containers parent box)
         (oset box :primary t)))))
@@ -758,9 +760,8 @@ of BOX."
            (if (member rel '("in" "on" "behind" "in front of"))
                (org-real--flex-add next match world)
              (oset next :parent parent)
-             (oset parent :children (org-real--add-to-list
-                                     (with-slots (children) parent children)
-                                     next)))
+             (with-slots (children) parent
+               (setq children (org-real--push children next))))
            (org-real--add-matching next next world)))
       next-boxes))))
 
@@ -795,7 +796,8 @@ that the width of WORLD is kept below 80 characters if possible."
                                          siblings)
                                         (org-real-box :y-order -9999)))))
       (oset box :parent parent)
-      (oset parent :children (org-real--add-to-list (with-slots (children) parent children) box))
+      (with-slots (children) parent
+        (setq children (org-real--push children box)))
       (when (and last-sibling (not (with-slots (in-front) box in-front)))
         (with-slots
             ((last-sibling-y y-order)
