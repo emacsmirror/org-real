@@ -73,6 +73,11 @@
   :type 'number
   :group 'org-real)
 
+(defcustom org-real-include-children t
+  "Whether to show children when opening a real link."
+  :type 'boolean
+  :group 'org-real)
+
 ;;;; Faces
 
 (defface org-real-primary
@@ -155,8 +160,22 @@ describing where BOX is."
 
 (defun org-real-follow (url &rest _)
   "Open a real link URL in a popup buffer."
+  (pp include-children)
   (let* ((containers (org-real--parse-url url))
          (box (org-real--make-instance 'org-real-box (copy-tree containers))))
+    (if org-real-include-children
+        (let* ((primary-name (plist-get (car (reverse containers)) :name))
+               (children (mapcar
+                          (lambda (containers)
+                            (org-real--make-instance 'org-real-box containers))
+                          (seq-filter
+                           (lambda (containers)
+                             (seq-some
+                              (lambda (container)
+                                (string= primary-name (plist-get container :name)))
+                              containers))
+                           (org-real--parse-buffer)))))
+          (setq box (org-real--merge (push box children)))))
     (org-real--pp box (copy-tree containers))))
 
 (defun org-real-complete (&optional existing)
