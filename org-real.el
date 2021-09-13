@@ -78,6 +78,11 @@
   :type 'boolean
   :group 'org-real)
 
+(defcustom org-real-flex-width 80
+  "When merging links, try to keep width below this"
+  :type 'number
+  :group 'org-real)
+
 ;;;; Faces
 
 (defface org-real-primary
@@ -905,7 +910,8 @@ of BOX."
   "Add BOX to a PARENT box already existing in WORLD.
 
 This function ignores the :rel slot and adds BOX in such a way
-that the width of WORLD is kept below 80 characters if possible."
+that the width of WORLD is kept below `org-real-flex-width'
+characters if possible."
   (with-slots ((siblings children)) parent
     (let* ((all-siblings (seq-filter
                           (lambda (sibling)
@@ -937,7 +943,7 @@ that the width of WORLD is kept below 80 characters if possible."
           (oset box :x-order (+ 1 last-sibling-x))
           (let ((new-width (org-real--get-width world)))
             (org-real--make-dirty world)
-            (when (and (> new-width cur-width) (> new-width 80))
+            (when (and (> new-width cur-width) (> new-width org-real-flex-width))
               (oset box :y-order (+ 1 last-sibling-y))
               (oset box :x-order 0))))))))
 
