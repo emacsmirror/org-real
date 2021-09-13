@@ -182,7 +182,7 @@ describing where BOX is."
   (let* ((container-matrix (org-real--parse-buffer))
          (containers (if existing
                          (org-real--parse-url existing)
-                       (org-real--complete-thing "Thing: " container-matrix))))
+                       (org-real--complete-thing "Thing: " container-matrix '()))))
     (catch 'confirm
       (while t
         (org-real--pp (org-real--make-instance 'org-real-box containers) containers)
@@ -193,27 +193,35 @@ describing where BOX is."
            ((eq response 'backspace)
             (pop containers)
             (if (= 0 (length containers))
-                (setq containers (org-real--complete-thing "Thing: " container-matrix))))
+                (setq containers (org-real--complete-thing "Thing: " container-matrix containers))))
            ((eq response ?+)
             (let* ((top (plist-get (car containers) :name))
                    (preposition
                     (completing-read (concat "The " top " is: ") org-real-prepositions nil t))
                    (additional-containers
-                    (org-real--complete-thing (concat "The " top " is " preposition " the: ") container-matrix)))
+                    (org-real--complete-thing (concat "The " top " is " preposition " the: ")
+                                              container-matrix
+                                              containers)))
               (setcar containers (plist-put (car containers) :rel preposition))
               (setq containers (append additional-containers containers))))))))
     (org-real--to-link containers)))
 
-(defun org-real--complete-thing (prompt container-matrix)
+(defun org-real--complete-thing (prompt container-matrix existing)
   "Use `completing-read' with PROMPT to get a list of containers.
 
 CONTAINER-MATRIX is used to generate possible completions.  The
 return value is the longest list of containers from the matrix
 that contains, as the last element, a container with a name
-matching the one returned from `completing-read'."
-  (let* ((completions (mapcar
-                       (lambda (container) (plist-get container :name))
-                       (apply 'append container-matrix)))
+matching the one returned from `completing-read'.
+
+EXISTING containers will be excluded from the completion."
+  (let* ((existing-names (mapcar (lambda (container) (plist-get container :name)) existing))
+         (completions (seq-filter
+                       (lambda (name) (not (member name existing-names)))
+                       (cl-delete-duplicates
+                        (mapcar
+                         (lambda (container) (plist-get container :name))
+                         (apply 'append container-matrix)))))
          (result (completing-read prompt completions nil 'confirm))
          (existing-containers (car (seq-sort
                                     (lambda (a b) (> (length a) (length b)))
