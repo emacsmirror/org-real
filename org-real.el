@@ -17,6 +17,12 @@
 
 ;;; Code:
 
+;;;; Requirements
+
+(require 'eieio)
+(require 'org-element)
+(require 'cl-lib)
+
 ;;;; Patch! 0.0.1 -> 0.1.0+
 ;;;; Will be removed in version 1.0.0+
 
@@ -40,12 +46,6 @@
   (setf customizations (cl-delete "org-real-margin" customizations :key #'car :test #'string=))
   (setf customizations (cl-delete "org-real-padding" customizations :key #'car :test #'string=))
   (put 'org-real 'custom-group customizations))
-
-;;;; Requirements
-
-(require 'eieio)
-(require 'org-element)
-(require 'cl-lib)
 
 ;;;; Customization variables
 
