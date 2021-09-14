@@ -1,5 +1,5 @@
 
-* TODO Replace [[real://bathroom cabinet/second shelf?rel=in/third shelf?rel=above/razors?rel=above/toothbrush?rel=to the left of][toothbrush]]
+* TODO Replace [[real://bathroom cabinet/second shelf?rel=in/third shelf?rel=above/razors?rel=on top of/toothbrush?rel=to the left of][toothbrush]]
 * SOMEDAY Get new tires for the [[real://shed/bike?rel=behind][bike]]
 * Items to bring to the park
   - [[real://closet/sunscreen?rel=in/mosquito spray?rel=in front of][mosquito spray]]
