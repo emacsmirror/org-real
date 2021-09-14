@@ -73,8 +73,8 @@
   :type 'number
   :group 'org-real)
 
-(defcustom org-real-include-children t
-  "Whether to show children when opening a real link."
+(defcustom org-real-include-context t
+  "Whether to show context when opening a real link."
   :type 'boolean
   :group 'org-real)
 
@@ -167,7 +167,7 @@ describing where BOX is."
   "Open a real link URL in a popup buffer."
   (let* ((containers (org-real--parse-url url))
          (box (org-real--make-instance 'org-real-box (copy-tree containers))))
-    (if org-real-include-children
+    (if org-real-include-context
         (let* ((primary-name (plist-get (car (reverse containers)) :name))
                (children (mapcar
                           (lambda (containers)
