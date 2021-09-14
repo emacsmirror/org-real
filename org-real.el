@@ -79,7 +79,7 @@
   :group 'org-real)
 
 (defcustom org-real-flex-width 80
-  "When merging links, try to keep width below this"
+  "When merging links, try to keep width below this."
   :type 'number
   :group 'org-real)
 
@@ -419,7 +419,8 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
   "Create an instance of `org-real-box' from CONTAINERS.
 
 CONTAINERS is a list of plists containing at least a :name
-property and optionally a :rel property."
+property and optionally a :rel property.  If SKIP-PRIMARY is
+non-nil, skip setting :primary slot on the last box."
   (when-let* ((world (org-real-box))
               (base-container (pop containers))
               (base (org-real-box :name (plist-get base-container :name))))
@@ -428,7 +429,7 @@ property and optionally a :rel property."
       (setq children (org-real--push children base)))
     (if containers
         (org-real--make-instance-helper containers world base skip-primary)
-      (unless skip-primary (oset box :primary t)))
+      (unless skip-primary (oset base :primary t)))
     world))
 
 (cl-defmethod org-real--merge (boxes)
@@ -677,7 +678,6 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
   "Help create a 3D representation of CONTAINERS.
 
 PREV must already existing in PARENT."
-  (message "Skip primary? %s" skip-primary)
   (let* ((container (pop containers))
          (rel (plist-get container :rel))
          (box (org-real-box :name (plist-get container :name))))
@@ -810,6 +810,10 @@ If EXCLUDE-CHILDREN, only retrieve sibling boxes."
 (cl-defmethod org-real--add-matching ((box org-real-box)
                                       (match org-real-box)
                                       (world org-real-box))
+  "Add BOX to WORLD after finding a matching box MATCH already in WORLD.
+
+MATCH is used to set the :rel-box and :parent slots on relatives
+of BOX."
   (oset match :primary (or (with-slots (primary) match primary)
                            (with-slots (primary) box primary)))
   (mapc
@@ -820,10 +824,10 @@ If EXCLUDE-CHILDREN, only retrieve sibling boxes."
 (cl-defmethod org-real--add-matching-helper ((next org-real-box)
                                              (match org-real-box)
                                              (world org-real-box))
-  "Add BOX to WORLD after finding a matching box MATCH already in WORLD.
+  "Helper for `org-real--add-matching'.
 
-MATCH is used to set the :rel-box and :parent slots on children
-of BOX."
+When MATCH is found, add relative NEXT into WORLD according to
+its relationship to MATCH."
   (with-slots
       (children
        parent
