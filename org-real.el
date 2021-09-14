@@ -171,7 +171,7 @@ describing where BOX is."
         (let* ((primary-name (plist-get (car (reverse containers)) :name))
                (children (mapcar
                           (lambda (containers)
-                            (org-real--make-instance 'org-real-box containers))
+                            (org-real--make-instance 'org-real-box containers t))
                           (seq-filter
                            (lambda (containers)
                              (setq containers (reverse containers))
@@ -413,7 +413,9 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
     (oset collection :box box)
     collection))
 
-(cl-defmethod org-real--make-instance ((_ (subclass org-real-box)) containers)
+(cl-defmethod org-real--make-instance ((_ (subclass org-real-box))
+                                       containers
+                                       &optional skip-primary)
   "Create an instance of `org-real-box' from CONTAINERS.
 
 CONTAINERS is a list of plists containing at least a :name
@@ -425,7 +427,8 @@ property and optionally a :rel property."
     (with-slots (children) world
       (setq children (org-real--push children base)))
     (if containers
-        (org-real--make-instance-helper containers world base))
+        (org-real--make-instance-helper containers world base skip-primary)
+      (unless skip-primary (oset box :primary t)))
     world))
 
 (cl-defmethod org-real--merge (boxes)
@@ -667,10 +670,14 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 
 ;;;; Private class methods
 
-(cl-defmethod org-real--make-instance-helper (containers parent (prev org-real-box))
+(cl-defmethod org-real--make-instance-helper (containers
+                                              parent
+                                              (prev org-real-box)
+                                              &optional skip-primary)
   "Help create a 3D representation of CONTAINERS.
 
 PREV must already existing in PARENT."
+  (message "Skip primary? %s" skip-primary)
   (let* ((container (pop containers))
          (rel (plist-get container :rel))
          (box (org-real-box :name (plist-get container :name))))
@@ -737,14 +744,14 @@ PREV must already existing in PARENT."
           (with-slots (children) prev
             (setq children (org-real--push children box)))
           (if containers
-              (org-real--make-instance-helper containers prev box)
-            (oset box :primary t)))
+              (org-real--make-instance-helper containers prev box skip-primary)
+            (unless skip-primary (oset box :primary t))))
       (oset box :parent parent)
       (with-slots (children) parent
         (setq children (org-real--push children box)))
       (if containers
-          (org-real--make-instance-helper containers parent box)
-        (oset box :primary t)))))
+          (org-real--make-instance-helper containers parent box skip-primary)
+        (unless skip-primary (oset box :primary t))))))
 
 (cl-defmethod org-real--make-dirty (box)
   "Clear all TOP LEFT WIDTH and HEIGHT coordinates from BOX and its children."
