@@ -195,9 +195,9 @@ describing where BOX is."
         (org-real--pp (org-real--make-instance 'org-real-box containers) containers)
         (let ((response (read-event "RETURN    - Confirm\nBACKSPACE - Remove context\n+         - Add context")))
           (cond
-           ((eq response 'return)
+           ((or (eq response 'return) (eq response 13))
             (throw 'confirm containers))
-           ((eq response 'backspace)
+           ((or (eq response 'backspace) (eq response 127))
             (pop containers)
             (if (= 0 (length containers))
                 (setq containers (org-real--complete-thing "Thing: " container-matrix containers))))
