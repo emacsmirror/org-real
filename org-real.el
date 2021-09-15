@@ -693,7 +693,6 @@ PREV must already existing in PARENT."
         (with-slots
             ((prev-x x-order)
              (prev-y y-order)
-             parent
              (prev-behind behind)
              (prev-on-top on-top)
              (prev-in-front in-front))
