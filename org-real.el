@@ -681,77 +681,97 @@ PREV must already existing in PARENT."
   (let* ((container (pop containers))
          (rel (plist-get container :rel))
          (box (org-real-box :name (plist-get container :name))))
-    (when prev
-      (oset box :rel (plist-get container :rel))
-      (oset box :rel-box prev)
-      (with-slots
-          ((cur-x x-order)
-           (cur-y y-order)
-           (cur-behind behind)
-           (cur-on-top on-top)
-           (cur-in-front in-front))
-          box
+    (oset box :rel (plist-get container :rel))
+    (oset box :rel-box prev)
+    (with-slots
+        ((cur-x x-order)
+         (cur-y y-order)
+         (cur-behind behind)
+         (cur-on-top on-top)
+         (cur-in-front in-front))
+        box
         (with-slots
             ((prev-x x-order)
              (prev-y y-order)
+             parent
              (prev-behind behind)
              (prev-on-top on-top)
              (prev-in-front in-front))
             prev
-          (cond ((or (string= rel "in") (string= rel "on"))
-                 (setq cur-x prev-x)
-                 (setq cur-y prev-y)
-                 (setq cur-behind prev-behind))
-                ((string= rel "behind")
-                 (setq cur-x prev-x)
-                 (setq cur-y prev-y)
-                 (setq cur-behind t))
-                ((string= rel "in front of")
-                 (setq cur-x prev-x)
-                 (setq cur-y 9999)
-                 (setq cur-behind prev-behind)
-                 (setq cur-in-front t))
-                ((string= rel "on top of")
-                 (setq cur-x prev-x)
-                 (setq cur-y -9999)
-                 (setq cur-behind prev-behind)
-                 (setq cur-on-top t))
-                ((string= rel "above")
-                 (setq cur-x prev-x)
-                 (setq cur-y (- prev-y 1))
-                 (setq cur-behind prev-behind))
-                ((string= rel "below")
-                 (setq cur-x prev-x)
-                 (setq cur-y (+ 1 prev-y))
-                 (setq cur-behind prev-behind)
-                 (setq cur-in-front prev-in-front))
-                ((string= rel "to the left of")
-                 (setq cur-x (- prev-x 1))
-                 (setq cur-y prev-y)
-                 (setq cur-behind prev-behind)
-                 (setq cur-on-top prev-on-top)
-                 (setq cur-in-front prev-in-front))
-                ((string= rel "to the right of")
-                 (setq cur-x (+ 1 prev-x))
-                 (setq cur-y prev-y)
-                 (setq cur-behind prev-behind)
-                 (setq cur-on-top prev-on-top)
-                 (setq cur-in-front prev-in-front))))))
+          (with-slots ((siblings children)) parent
+            (let ((row-siblings (seq-filter
+                                 (lambda (sibling)
+                                   (with-slots (y-order) sibling
+                                     (= prev-y y-order)))
+                                 (org-real--get-all siblings)))
+                  (sibling-y-orders (mapcar
+                                     (lambda (sibling) (with-slots (y-order) sibling y-order))
+                                     (seq-filter
+                                      (lambda (sibling)
+                                        (with-slots (in-front on-top) sibling
+                                          (not (or in-front on-top))))
+                                      (org-real--get-all siblings)))))
 
-    (if (and prev (member rel '("in" "on" "behind" "in front of" "on top of")))
-        (progn
-          (oset box :parent prev)
-          (with-slots (children) prev
-            (setq children (org-real--push children box)))
-          (if containers
-              (org-real--make-instance-helper containers prev box skip-primary)
-            (unless skip-primary (oset box :primary t))))
-      (oset box :parent parent)
-      (with-slots (children) parent
-        (setq children (org-real--push children box)))
-      (if containers
-          (org-real--make-instance-helper containers parent box skip-primary)
-        (unless skip-primary (oset box :primary t))))))
+              (cond ((or (string= rel "in") (string= rel "on"))
+                     (setq cur-behind prev-behind))
+                    ((string= rel "behind")
+                     (setq cur-behind t))
+                    ((string= rel "in front of")
+                     (setq cur-y 9999)
+                     (setq cur-behind prev-behind)
+                     (setq cur-in-front t))
+                    ((string= rel "on top of")
+                     (setq cur-y -9999)
+                     (setq cur-behind prev-behind)
+                     (setq cur-on-top t))
+                    ((string= rel "above")
+                     (setq cur-x prev-x)
+                     (setq cur-y (- (apply 'min 0 sibling-y-orders) 1))
+                     (setq cur-behind prev-behind))
+                    ((string= rel "below")
+                     (setq cur-x prev-x)
+                     (setq cur-y (+ 1 (apply 'max 0 sibling-y-orders)))
+                     (setq cur-behind prev-behind)
+                     (setq cur-in-front prev-in-front))
+                    ((string= rel "to the left of")
+                     (setq cur-x prev-x)
+                     (mapc
+                      (lambda (sibling)
+                        (with-slots (x-order) sibling
+                          (if (>= x-order cur-x)
+                              (setq x-order (+ 1 x-order)))))
+                      row-siblings)
+                     (setq cur-y prev-y)
+                     (setq cur-behind prev-behind)
+                     (setq cur-on-top prev-on-top)
+                     (setq cur-in-front prev-in-front))
+                    ((string= rel "to the right of")
+                     (setq cur-x (+ 1 prev-x))
+                     (mapc
+                      (lambda (sibling)
+                      (with-slots (x-order) sibling
+                        (if (>= x-order cur-x)
+                            (setq x-order (+ 1 x-order)))))
+                      row-siblings)
+                     (setq cur-y prev-y)
+                     (setq cur-behind prev-behind)
+                     (setq cur-on-top prev-on-top)
+                     (setq cur-in-front prev-in-front)))
+              
+              (if (and prev (member rel '("in" "on" "behind" "in front of" "on top of")))
+                  (progn
+                    (oset box :parent prev)
+                    (with-slots (children) prev
+                      (setq children (org-real--push children box)))
+                    (if containers
+                        (org-real--make-instance-helper containers prev box skip-primary)
+                      (unless skip-primary (oset box :primary t))))
+                (oset box :parent parent)
+                (with-slots (children) parent
+                  (setq children (org-real--push children box)))
+                (if containers
+                    (org-real--make-instance-helper containers parent box skip-primary)
+                  (unless skip-primary (oset box :primary t))))))))))
 
 (cl-defmethod org-real--make-dirty (box)
   "Clear all TOP LEFT WIDTH and HEIGHT coordinates from BOX and its children."
@@ -839,66 +859,68 @@ its relationship to MATCH."
        (match-on-top on-top))
       match
     (with-slots ((siblings children)) parent
-      (let ((next-boxes (org-real--next next)))
-        (with-slots
-            (rel
-             rel-box
-             (next-y y-order)
-             (next-x x-order)
-             (next-behind behind)
-             (next-in-front in-front)
-             (next-on-top on-top))
-            next
-          (if (or next-on-top next-in-front)
-              (progn
-                (setq next-behind match-behind)
-                (let ((sibling-x-orders (mapcar
-                                         (lambda (child) (with-slots (x-order) child x-order))
-                                         (seq-filter
-                                          (lambda (child)
-                                            (with-slots (in-front on-top) child
-                                              (and (eq next-in-front in-front)
-                                                   (eq next-on-top on-top))))
-                                          (org-real--get-all children)))))
-                  (if (string= rel "to the left of")
-                      (setq next-x (- (apply 'min 0 sibling-x-orders) 1))
-                    (setq next-x (+ 1 (apply 'max 0 sibling-x-orders))))))
-            (let ((sibling-x-orders (mapcar
-                                     (lambda (sibling) (with-slots (x-order) sibling x-order))
-                                     (seq-filter
-                                      (lambda (sibling)
-                                        (with-slots (in-front on-top y-order) sibling
-                                          (and (not (or in-front on-top))
-                                               (= y-order next-y))))
-                                      (org-real--get-all siblings))))
-                  (sibling-y-orders (mapcar
-                                     (lambda (sibling) (with-slots (y-order) sibling y-order))
-                                     (seq-filter
-                                      (lambda (sibling)
-                                        (with-slots (in-front on-top) sibling
-                                          (not (or in-front on-top))))
-                                      (org-real--get-all siblings)))))
-              (cond
-               ((string= rel "above")
-                (setq next-y (- (apply 'min sibling-y-orders) 1))
-                (setq next-x match-x)
-                (setq next-behind match-behind))
-               ((string= rel "below")
-                (setq next-y (+ 1 (apply 'max sibling-y-orders)))
-                (setq next-x match-x)
-                (setq next-behind match-behind))
-               ((string= rel "to the right of")
-                (setq next-x (+ 1 (apply 'max sibling-x-orders)))
-                (setq next-y match-y)
-                (setq next-behind match-behind)
-                (setq next-in-front match-in-front)
-                (setq next-on-top match-on-top))
-               ((string= rel "to the left of")
-                (setq next-x (- (apply 'min sibling-x-orders) 1))
-                (setq next-y match-y)
-                (setq next-behind match-behind)
-                (setq next-in-front match-in-front)
-                (setq next-on-top match-on-top)))))
+      (with-slots
+          (rel
+           rel-box
+           (next-y y-order)
+           (next-x x-order)
+           (next-behind behind)
+           (next-in-front in-front)
+           (next-on-top on-top))
+          next
+        (let ((next-boxes (org-real--next next))
+              (row-siblings (seq-filter
+                             (lambda (sibling)
+                               (with-slots (y-order) sibling
+                                 (= y-order match-y)))
+                             (org-real--get-all siblings)))
+              (sibling-y-orders (mapcar
+                                 (lambda (sibling) (with-slots (y-order) sibling y-order))
+                                 (seq-filter
+                                  (lambda (sibling)
+                                    (with-slots (in-front on-top) sibling
+                                      (not (or in-front on-top))))
+                                  (org-real--get-all siblings)))))
+          (cond
+           ((string= rel "to the left of")
+            (setq next-x match-x)
+            (setq next-y match-y)
+            (setq next-behind match-behind)
+            (mapc
+             (lambda (sibling)
+               (with-slots (x-order) sibling
+                 (if (>= x-order next-x)
+                     (setq x-order (+ 1 x-order)))))
+             row-siblings))
+           ((string= rel "to the right of")
+            (setq next-x (+ 1 match-x))
+            (setq next-y match-y)
+            (setq next-behind match-behind)
+            (mapc
+             (lambda (sibling)
+               (with-slots (x-order) sibling
+                 (if (>= x-order next-x)
+                     (setq x-order (+ 1 x-order)))))
+             row-siblings))
+           ((string= rel "above")
+            (setq next-y (- (apply 'min 0 sibling-y-orders) 1))
+            (setq next-x match-x)
+            (setq next-behind match-behind))
+           ((string= rel "below")
+            (setq next-y (+ 1 (apply 'max 0 sibling-y-orders)))
+            (setq next-x match-x)
+            (setq next-behind match-behind))
+           ((or next-on-top next-in-front)
+            (setq next-x (+ 1 (apply 'max -9999
+                                     (mapcar
+                                      (lambda (child) (with-slots (x-order) child x-order))
+                                      (seq-filter
+                                       (lambda (child)
+                                         (with-slots (in-front on-top) child
+                                           (and (eq next-in-front in-front)
+                                                (eq next-on-top on-top))))
+                                       (org-real--get-all children))))))
+            (setq next-behind match-behind)))
           (oset next :rel-box match)
           (cond
            ((member rel '("in front of" "on top of"))
