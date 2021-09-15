@@ -3,13 +3,20 @@
 Keep track of real things as org-mode links.
 
 #+begin_src emacs-lisp
-(use-package org-real
-  :straight (org-real :type git :host gitlab :repo "tygrdev/org-real"))
+  (use-package org-real
+    :straight (org-real :type git :host gitlab :repo "tygrdev/org-real"))
 #+end_src
 
 *OR*
 
 [[https://gitlab.com/tygrdev/org-real/-/releases][Download the latest release]]
+
+and
+
+=M-x package-install-file org-real-x.y.z.el=
+#+begin_src emacs-lisp
+  (require 'org-real)
+#+end_src
 
 * Status *BETA*
   - TODO ERT tests
@@ -75,19 +82,24 @@ Keep track of real things as org-mode links.
    If any container in the new link does not match an existing
    container in the buffer, org-real will prompt you to replace all
    occurences of that thing with the new context and relationships.
+
+   This makes it easy to keep things in sync. If any one link changes
+   location, all links in the currnet buffer are updated accordingly.
+
+   [[file:demo/edit-link-apply-changes.gif]]
    
 ** Opening links
 
-   To open a link, place the cursor within the link and press =C-c
-   C-o=. This will display a popup buffer showing the location of the
-   thing described by the link.
+   To open a real link, place the cursor within the link and press
+   =C-c C-o=. This will display a popup buffer showing the location of
+   the thing described by the link.
 
-   [[file:demo/open-link.gif]]
+   [[file:demo/open-links.gif]]
 
 ** =org-real-world=
    
    To view all real links in the current buffer in a combined diagram,
    use the interactive function =org-real-world=
 
-   [[file:demo/org-real-world.png]]
+   [[file:demo/garage.svg]]
    
