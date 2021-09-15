@@ -82,6 +82,11 @@ and
    If any container in the new link does not match an existing
    container in the buffer, org-real will prompt you to replace all
    occurences of that thing with the new context and relationships.
+
+   This makes it easy to keep things in sync. If any one link changes
+   location, all links in the currnet buffer are updated accordingly.
+
+   [[file:demo/edit-link-apply-changes.gif]]
    
 ** Opening links
 
