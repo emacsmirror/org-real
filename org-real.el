@@ -672,12 +672,12 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 ;;;; Private class methods
 
 (cl-defmethod org-real--make-instance-helper (containers
-                                              parent
+                                              (parent org-real-box)
                                               (prev org-real-box)
                                               &optional skip-primary)
   "Help create a 3D representation of CONTAINERS.
 
-PREV must already existing in PARENT."
+PREV must already exist in PARENT."
   (let* ((container (pop containers))
          (rel (plist-get container :rel))
          (box (org-real-box :name (plist-get container :name))))
