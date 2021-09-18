@@ -304,8 +304,7 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
                               (replace-link (org-real--to-link
                                              (reverse
                                               (append (cl-subseq old-containers 0 old-index)
-                                                      new-containers))))
-                              (old-desc ""))
+                                                      new-containers)))))
                     (when (catch 'conflict
                             (if (not (= (length new-containers) (- (length old-containers) old-index)))
                                 (throw 'conflict t))
@@ -318,15 +317,19 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
                               (setq new-index (+ 1 new-index))
                               (setq old-index (+ 1 old-index)))
                             nil)
-                      (goto-char begin)
-                      (if (org-in-regexp org-link-bracket-re 1)
-                          (setq old-desc (when (match-end 2) (match-string-no-properties 2))))
-                      (push
-                       `(lambda ()
-                          (delete-region ,begin ,end)
-                          (goto-char ,begin)
-                          (insert (org-real--link-make-string ,replace-link ,old-desc)))
-                       changes))))))
+                      (let* ((old-desc (save-excursion
+                                         (and (goto-char begin)
+                                              (org-in-regexp org-link-bracket-re 1)
+                                              (match-end 2)
+                                              (match-string-no-properties 2))))
+                             (new-link (org-real--link-make-string replace-link old-desc)))
+                        (push
+                         `(lambda ()
+                            (save-excursion
+                              (delete-region ,begin ,end)
+                              (goto-char ,begin)
+                              (insert ,new-link)))
+                         changes)))))))
             (when (and changes
                        (or replace-all (let ((response
                                               (read-char-choice
