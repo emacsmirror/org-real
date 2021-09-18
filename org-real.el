@@ -657,7 +657,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                                                 child
                                               max))))
                                       to-the-left
-                                      (org-real-box :x-order -9999)))))
+                                      (org-real-box :x-order -1.0e+INF)))))
             (if directly-left
                 (setq stored-left (+ (org-real--get-left directly-left)
                                      (org-real--get-width directly-left)
@@ -716,11 +716,11 @@ PREV must already exist in PARENT."
                     ((string= rel "behind")
                      (setq cur-behind t))
                     ((string= rel "in front of")
-                     (setq cur-y 9999)
+                     (setq cur-y 1.0e+INF)
                      (setq cur-behind prev-behind)
                      (setq cur-in-front t))
                     ((string= rel "on top of")
-                     (setq cur-y -9999)
+                     (setq cur-y -1.0e+INF)
                      (setq cur-behind prev-behind)
                      (setq cur-on-top t))
                     ((string= rel "above")
@@ -910,7 +910,7 @@ its relationship to MATCH."
             (setq next-x match-x)
             (setq next-behind match-behind))
            ((or next-on-top next-in-front)
-            (setq next-x (+ 1 (apply 'max -9999
+            (setq next-x (+ 1 (apply 'max 0
                                      (mapcar
                                       (lambda (child) (with-slots (x-order) child x-order))
                                       (seq-filter
@@ -961,7 +961,7 @@ characters if possible."
                                            sibling
                                          max)))))
                                all-siblings
-                               (org-real-box :y-order -99999))))
+                               (org-real-box :y-order -1.0e+INF))))
           (with-slots
               ((last-sibling-y y-order)
                (last-sibling-x x-order))
