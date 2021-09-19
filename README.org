@@ -103,3 +103,7 @@ and
 
    [[file:demo/garage.svg]]
    
+** =org-real-headlines=
+
+   To view all headlines in an org-mode file as an org-real diagram,
+   use the interactive function =org-real-headlines=

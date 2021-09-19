@@ -14,6 +14,20 @@
 ;;
 ;; The function `org-real-world' will display all real links in the
 ;; current buffer.
+;;
+;; The function `org-real-headlines' will display all headlines in the
+;; current org file as an org-real diagram.
+;;
+;; When in an Org Real mode diagram, the standard movement keys will
+;; move by boxes rather than characters.  Each button has the
+;; following keys:
+;;
+;;   RET   - Jump to first occurrence of link.
+;;   o     - Open next occurrence of link in other window.
+;;             Pressed multiple times, cycle through occurrences.
+;;   M-RET - Open all occurrences as separate buffers.
+;;             This will split the current window as needed.
+;;
 
 ;;; Code:
 
@@ -113,6 +127,13 @@
        (org-real--make-instance 'org-real-box containers))
      (org-real--parse-buffer)))))
 
+(defun org-real-headlines (max-level)
+  "View all org headlines as an org real diagram.
+
+MAX-LEVEL is the maximum level to show headlines for."
+  (interactive "P")
+  (org-real--pp (org-real--parse-headlines (or max-level 2))))
+
 ;;;; Org Real mode
 
 (defun org-real-tab-cycle ()
@@ -127,6 +148,40 @@
   (if-let ((pos (seq-find (lambda (pos) (< pos (point))) (reverse org-real--tab-ring))))
       (goto-char pos)))
 
+(defun org-real-tab-cycle-down ()
+  "Cycle to the next button on the row below."
+  (interactive)
+  (let ((col (current-column)))
+    (forward-line 1)
+    (org-real-tab-cycle)
+    (move-to-column col t)
+    (let ((pos (point)))
+      (goto-char (seq-reduce
+                  (lambda (closest p)
+                    (if (< (abs (- pos p))
+                           (abs (- pos closest)))
+                        p
+                      closest))
+                  org-real--tab-ring
+                  1.0e+INF)))))
+
+(defun org-real-tab-cycle-up ()
+  "Cycle to the next button on the row above."
+  (interactive)
+  (let ((col (current-column)))
+    (forward-line -1)
+    (org-real-tab-uncycle)
+    (move-to-column col t)
+    (let ((pos (point)))
+      (goto-char (seq-reduce
+                  (lambda (closest p)
+                    (if (< (abs (- pos p))
+                           (abs (- pos closest)))
+                        p
+                      closest))
+                  org-real--tab-ring
+                  1.0e+INF)))))
+
 (define-derived-mode org-real-mode special-mode
   "Org Real"
   "Mode for viewing an org-real diagram.
@@ -137,8 +192,24 @@ The following commands are available:
   :group 'org-mode
   (toggle-truncate-lines t))
 
-(define-key org-real-mode-map (kbd "TAB") 'org-real-tab-cycle)
-(define-key org-real-mode-map (kbd "<backtab>") 'org-real-tab-uncycle)
+(mapc
+ (lambda (key) (define-key org-real-mode-map (kbd (car key)) (cdr key)))
+ '(("TAB"       . org-real-tab-cycle)
+   ("<right>"   . org-real-tab-cycle)
+   ("C-f"       . org-real-tab-cycle)
+   ("M-f"       . org-real-tab-cycle)
+   ("f"         . org-real-tab-cycle)
+   ("<backtab>" . org-real-tab-uncycle)
+   ("<left>"    . org-real-tab-uncycle)
+   ("C-b"       . org-real-tab-uncycle)
+   ("M-b"       . org-real-tab-uncycle)
+   ("b"         . org-real-tab-uncycle)
+   ("<up>"      . org-real-tab-cycle-up)
+   ("C-p"       . org-real-tab-cycle-up)
+   ("p"         . org-real-tab-cycle-up)
+   ("<down>"    . org-real-tab-cycle-down)
+   ("C-n"       . org-real-tab-cycle-down)
+   ("n"         . org-real-tab-cycle-down)))
 
 ;;;; Pretty printing
 
@@ -1036,6 +1107,38 @@ characters if possible."
         (oset box :parent parent)
         (setq siblings (org-real--push siblings box))))))
 
+(cl-defmethod org-real--add-headline (headline
+                                      (parent org-real-box)
+                                      (world org-real-box)
+                                      max-level)
+  "Add HEADLINE to WORLD as a child of PARENT.
+
+If HEADLINE is greater than MAX-LEVEL, exclude it and its
+children."
+  (let* ((pos (org-element-property :begin headline))
+         (level (org-element-property :level headline))
+         (rel (or (org-entry-get pos "REL") "in"))
+         (box (org-real-box :name (org-element-property :title headline)
+                            :rel rel
+                            :rel-box parent
+                            :parent parent
+                            :locations (list (set-marker (point-marker) pos))
+                            :in-front (string= rel "in front of")
+                            :on-top (string= rel "on top of")
+                            :y-order (cond
+                                      ((string= rel "in front of") 1.0e+INF)
+                                      ((string= rel "on top of") -1.0e+INF)
+                                      (t 0))
+                            :primary t)))
+    (when (<= level max-level)
+      (if (= 1 level)
+          (org-real--flex-add box parent world)
+        (org-real--add-matching-helper box parent world))
+      (mapc
+       (lambda (h)
+         (org-real--add-headline h box world max-level))
+       (cddr headline)))))
+
 ;;;; Org real mode buttons
 
 (defun org-real--jump-other-window (markers)
@@ -1086,10 +1189,10 @@ BOX is the box the button is being made for."
     (easy-mmode-define-keymap
      (mapcar
       (lambda (key) (cons (kbd (car key)) (cdr key)))
-      `(("o" . ,(org-real--jump-other-window locations))
+      `(("o"         . ,(org-real--jump-other-window locations))
         ("<mouse-1>" . ,(org-real--jump-to (car locations)))
-        ("RET" . ,(org-real--jump-to (car locations)))
-        ("M-RET" . ,(org-real--jump-all locations)))))))
+        ("RET"       . ,(org-real--jump-to (car locations)))
+        ("M-RET"     . ,(org-real--jump-all locations)))))))
 
 ;;;; Utility expressions
 
@@ -1162,6 +1265,20 @@ set to the :loc slot of each box."
                            (set-marker (point-marker) (org-element-property :begin link)))
                           t))))
     container-matrix))
+
+
+(defun org-real--parse-headlines (max-level)
+  "Create an org-real-box from the current buffer's headlines.
+
+MAX-LEVEL is the maximum depth of headlines to display."
+  (let ((headlines (cddr (org-element-parse-buffer 'headline)))
+        (world (org-real-box)))
+    (mapc
+     (lambda (headline)
+        (org-real--add-headline headline world world max-level))
+     headlines)
+    world))
+    
 
 (defun org-real--to-link (containers)
   "Create a link string from CONTAINERS."
