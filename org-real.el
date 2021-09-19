@@ -91,11 +91,15 @@
   "Face for the last thing in a real link."
   :group 'org-real)
 
-;;;; Constants
+;;;; Constants & variables
 
 (defconst org-real-prepositions
   '("in" "on" "behind" "in front of" "above" "below" "to the left of" "to the right of" "on top of")
   "List of available prepositions for things.")
+
+(defvar org-real--tab-ring '()
+  "List of buffer positions of buttons in an Org Real diagram.")
+(make-variable-buffer-local 'org-real--tab-ring)
 
 ;;;; Interactive functions
 
@@ -108,6 +112,33 @@
      (lambda (containers)
        (org-real--make-instance 'org-real-box containers))
      (org-real--parse-buffer)))))
+
+;;;; Org Real mode
+
+(defun org-real-tab-cycle ()
+  "Cycle through buttons in the current Org Real buffer."
+  (interactive)
+  (if-let ((pos (seq-find (lambda (pos) (> pos (point))) org-real--tab-ring)))
+      (goto-char pos)))
+
+(defun org-real-tab-uncycle ()
+  "Cycle through buttons in the current Org Real buffer in reverse."
+  (interactive)
+  (if-let ((pos (seq-find (lambda (pos) (< pos (point))) (reverse org-real--tab-ring))))
+      (goto-char pos)))
+
+(define-derived-mode org-real-mode special-mode
+  "Org Real"
+  "Mode for viewing an org-real diagram.
+
+The following commands are available:
+
+\\{org-real-mode-map}"
+  :group 'org-mode
+  (toggle-truncate-lines t))
+
+(define-key org-real-mode-map (kbd "TAB") 'org-real-tab-cycle)
+(define-key org-real-mode-map (kbd "<backtab>") 'org-real-tab-uncycle)
 
 ;;;; Pretty printing
 
@@ -122,17 +153,20 @@ describing where BOX is."
         (inhibit-read-only t)
         (buffer (get-buffer-create "Org Real")))
     (with-current-buffer buffer
+      (org-real-mode)
       (erase-buffer)
-      (toggle-truncate-lines t)
+      (setq org-real--tab-ring '())
       (if containers (org-real--pp-text containers))
       (let ((offset (- (line-number-at-pos)
                        org-real-margin-y
                        (* 2 org-real-padding-y))))
         (dotimes (_ (+ top height)) (insert (concat (make-string width ?\s) "\n")))
         (org-real--draw box offset)
-        (special-mode)))
+        (goto-char 0)
+        (setq org-real--tab-ring
+              (seq-sort '< org-real--tab-ring))))
     (display-buffer buffer `(display-buffer-pop-up-window
-                             (window-width . 80)
+                             (window-width . ,width)
                              (window-height . ,height)))))
 
 (defun org-real--pp-text (containers)
@@ -165,7 +199,7 @@ describing where BOX is."
 
 (defun org-real-follow (url &rest _)
   "Open a real link URL in a popup buffer."
-  (let* ((containers (org-real--parse-url url))
+  (let* ((containers (org-real--parse-url url (point-marker)))
          (box (org-real--make-instance 'org-real-box (copy-tree containers))))
     (if org-real-include-context
         (let* ((primary-name (plist-get (car (reverse containers)) :name))
@@ -188,7 +222,7 @@ describing where BOX is."
   "Complete a real link or edit EXISTING link."
   (let* ((container-matrix (org-real--parse-buffer))
          (containers (if existing
-                         (org-real--parse-url existing)
+                         (org-real--parse-url existing (point-marker))
                        (org-real--complete-thing "Thing: " container-matrix '()))))
     (catch 'confirm
       (while t
@@ -284,7 +318,7 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
       (setq new-link (org-unbracket-string "<" ">" (match-string 0)))))
     (when (and new-link
                (string= "real" (ignore-errors (url-type (url-generic-parse-url new-link)))))
-      (let ((new-containers (reverse (org-real--parse-url new-link))))
+      (let ((new-containers (reverse (org-real--parse-url new-link (point-marker)))))
         (while new-containers
           (let ((primary (plist-get (car new-containers) :name))
                 (changes '())
@@ -293,7 +327,8 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
               (lambda (old-link)
                 (when (string= (org-element-property :type old-link) "real")
                   (setq old-containers (reverse (org-real--parse-url
-                                                 (org-element-property :raw-link old-link))))
+                                                 (org-element-property :raw-link old-link)
+                                                 (set-marker (point-marker) (org-element-property :begin old-link)))))
                   (when-let* ((new-index 0)
                               (old-index (seq-position
                                           old-containers
@@ -396,7 +431,10 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
            :type number)
    (primary :initarg :primary
             :initform nil
-            :type boolean))
+            :type boolean)
+   (locations :initarg :locations
+              :initform '()
+              :type list))
   "A representation of a box in 3D space.")
 
 
@@ -426,7 +464,8 @@ property and optionally a :rel property.  If SKIP-PRIMARY is
 non-nil, skip setting :primary slot on the last box."
   (when-let* ((world (org-real-box))
               (base-container (pop containers))
-              (base (org-real-box :name (plist-get base-container :name))))
+              (base (org-real-box :name (plist-get base-container :name)
+                                  :locations (list (plist-get base-container :loc)))))
     (oset base :parent world)
     (with-slots (children) world
       (setq children (org-real--push children base)))
@@ -451,23 +490,34 @@ non-nil, skip setting :primary slot on the last box."
 (cl-defmethod org-real--draw ((box org-real-box) offset)
   "Insert an ascii drawing of BOX into the current buffer.
 
-OFFSET is the starting line to start insertion."
+OFFSET is the starting line to start insertion.
+
+Adds to list `org-real--tab-ring' the buffer position of each
+button drawn."
   (let ((children (with-slots (children) box (org-real--get-all children))))
-    (with-slots (name behind in-front on-top (dashed behind) primary) box
+    (with-slots (name behind in-front on-top (dashed behind) primary locations) box
       (when (slot-boundp box :name)
         (let* ((top (+ offset (org-real--get-top box)))
                (left (org-real--get-left box))
                (width (org-real--get-width box))
                (height (org-real--get-height box))
                (align-bottom (or in-front on-top)))
-          (cl-flet ((draw (coords str &optional primary)
-                          (forward-line (- (car coords) (line-number-at-pos)))
-                          (move-to-column (cdr coords) t)
-                          (if primary
-                              (put-text-property 0 (length str) 'face 'org-real-primary
-                                                 str))
-                          (insert str)
-                          (delete-char (length str))))
+          (cl-flet* ((draw (coords str)
+                           (forward-line (- (car coords) (line-number-at-pos)))
+                           (move-to-column (cdr coords) t)
+                           (insert str)
+                           (delete-char (length str)))
+                     (button (coords str &optional primary)
+                               (if (not locations) (draw coords str)
+                                 (forward-line (- (car coords) (line-number-at-pos)))
+                                 (move-to-column (cdr coords) t)
+                                 (add-to-list 'org-real--tab-ring (point))
+                                 (if primary (put-text-property 0 (length str)
+                                                                'face 'org-real-primary str))
+                                 (insert-button str
+                                                'help-echo "Jump to first occurence"
+                                                'keymap (org-real--create-button-keymap box))
+                                 (delete-char (length str)))))
             (draw (cons top left)
                   (concat "┌" (make-string (- width 2) (if dashed #x254c #x2500)) "┐"))
             (if align-bottom
@@ -475,7 +525,7 @@ OFFSET is the starting line to start insertion."
                       (concat "┴" (make-string (- width 2) (if dashed #x254c #x2500)) "┴"))
               (draw (cons (+ top height -1) left)
                     (concat "└" (make-string (- width 2) (if dashed #x254c #x2500)) "┘")))
-            (draw (cons (+ top 1 org-real-padding-y)
+            (button (cons (+ top 1 org-real-padding-y)
                         (+ left 1 org-real-padding-x))
                   name
                   primary)
@@ -683,9 +733,11 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 PREV must already exist in PARENT."
   (let* ((container (pop containers))
          (rel (plist-get container :rel))
-         (box (org-real-box :name (plist-get container :name))))
-    (oset box :rel (plist-get container :rel))
-    (oset box :rel-box prev)
+         (box (org-real-box
+               :name (plist-get container :name)
+               :rel (plist-get container :rel)
+               :rel-box prev
+               :locations (list (plist-get container :loc)))))
     (with-slots
         ((cur-x x-order)
          (cur-y y-order)
@@ -759,7 +811,7 @@ PREV must already exist in PARENT."
                      (setq cur-behind prev-behind)
                      (setq cur-on-top prev-on-top)
                      (setq cur-in-front prev-in-front)))
-              
+
               (if (and prev (member rel '("in" "on" "behind" "in front of" "on top of")))
                   (progn
                     (oset box :parent prev)
@@ -838,6 +890,8 @@ MATCH is used to set the :rel-box and :parent slots on relatives
 of BOX."
   (oset match :primary (or (with-slots (primary) match primary)
                            (with-slots (primary) box primary)))
+  (oset match :locations (append (with-slots (locations) match locations)
+                                 (with-slots (locations) box locations)))
   (mapc
    (lambda (next)
      (org-real--add-matching-helper next match world))
@@ -982,6 +1036,61 @@ characters if possible."
         (oset box :parent parent)
         (setq siblings (org-real--push siblings box))))))
 
+;;;; Org real mode buttons
+
+(defun org-real--jump-other-window (markers)
+  "Jump to location of link in other window.
+
+MARKERS is a list of locations of each button in the buffer."
+  (let ((i 0))
+    (lambda ()
+      (interactive)
+      (let* ((marker (nth i markers))
+             (buffer (marker-buffer marker))
+             (pos (marker-position marker)))
+        (save-selected-window
+          (switch-to-buffer-other-window buffer)
+          (goto-char pos))
+        (setq i (mod (+ 1 i) (length markers)))))))
+
+(defun org-real--jump-to (marker)
+  "Jump to the first occurrence of a link in the same window.
+
+MARKER is the position of the first occurrence of the link."
+  (lambda ()
+    (interactive)
+    (switch-to-buffer (marker-buffer marker))
+    (goto-char (marker-position marker))))
+
+(defun org-real--jump-all (markers)
+  "View all occurrences of a link in the same window.
+
+MARKERS is the list of positions of the link."
+  (lambda ()
+    (interactive)
+    (let ((size (/ (window-height) (length markers))))
+      (or (<= window-min-height size)
+          (error "To many buffers to visit simultaneously"))
+      (switch-to-buffer (marker-buffer (car markers)))
+      (goto-char (marker-position (car markers)))
+      (dolist (marker (cdr markers))
+        (select-window (split-window nil size))
+        (switch-to-buffer (marker-buffer marker))
+        (goto-char (marker-position marker))))))
+
+(cl-defmethod org-real--create-button-keymap ((box org-real-box))
+  "Create a keymap for a button in Org Real mode.
+
+BOX is the box the button is being made for."
+  (with-slots (locations) box
+    (easy-mmode-define-keymap
+     (mapcar
+      (lambda (key) (cons (kbd (car key)) (cdr key)))
+      `(("o" . ,(org-real--jump-other-window locations))
+        ("<mouse-1>" . ,(org-real--jump-to (car locations)))
+        ("RET" . ,(org-real--jump-to (car locations)))
+        ("M-RET" . ,(org-real--jump-all locations)))))))
+
 ;;;; Utility expressions
 
 (defun org-real--find-last-index (pred sequence)
@@ -1016,11 +1125,12 @@ LINK is escaped with backslashes for inclusion in buffer."
         (org-link-escape link)
         (if description (format "[%s]" description) "")))))
 
-(defun org-real--parse-url (str)
+(defun org-real--parse-url (str marker)
   "Parse STR into a list of plists.
 
 Returns a list of plists with a :name property and optionally a
-:rel property."
+:rel property.  MARKER is the location of the link and will be
+set to the :loc slot of each box."
   (let* ((url (url-generic-parse-url str))
          (host (url-host url))
          (path-and-query (url-path-and-query url))
@@ -1031,14 +1141,14 @@ Returns a list of plists with a :name property and optionally a
          (containers (mapcar
                       (lambda (token)
                         (let* ((location (split-string token "\\?"))
-                               (container (list :name (car location)))
+                               (container (list :name (car location) :loc marker))
                                (rel (and (string-match "&?rel=\\([^&]*\\)" (cadr location))
                                          (match-string 1 (cadr location)))))
                           (if rel
                               (plist-put container :rel rel)
                             container)))
                       tokens)))
-    (push (list :name host) containers)))
+    (push (list :name host :loc marker) containers)))
 
 (defun org-real--parse-buffer ()
   "Parse all real links in the current buffer."
@@ -1048,7 +1158,8 @@ Returns a list of plists with a :name property and optionally a
         (if (string= (org-element-property :type link) "real")
             (add-to-list 'container-matrix
                           (org-real--parse-url
-                           (org-element-property :raw-link link))
+                           (org-element-property :raw-link link)
+                           (set-marker (point-marker) (org-element-property :begin link)))
                           t))))
     container-matrix))
 
