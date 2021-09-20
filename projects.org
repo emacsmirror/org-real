@@ -1,0 +1,11 @@
+* Personal
+** Banking
+** Healthcare
+* Ideas
+** Keyboard pants
+** Org real
+* Work
+** Configure emacs
+** Install adobe illustrator
+
+
