@@ -142,7 +142,10 @@
 
 MAX-LEVEL is the maximum level to show headlines for."
   (interactive "P")
-  (org-real--pp (org-real--parse-headlines (or max-level 2))))
+  (org-real--pp
+   (org-real--parse-headlines (or max-level 2))
+   nil
+   'display-buffer-same-window))
 
 ;;;; Org Real mode
 
@@ -223,18 +226,22 @@ The following commands are available:
 
 ;;;; Pretty printing
 
-(defun org-real--pp (box &optional containers)
+(defun org-real--pp (box &optional containers display-buffer-fn)
   "Pretty print BOX in a popup buffer.
 
 If CONTAINERS is passed in, also pretty print a sentence
-describing where BOX is."
+describing where BOX is.
+
+DISPLAY-BUFFER-FN is used to display the diagram, by
+default `display-buffer-pop-up-window'."
   (let ((top (org-real--get-top box))
         (width (org-real--get-width box))
         (height (org-real--get-height box))
         (inhibit-read-only t)
         (buffer (get-buffer-create "Org Real")))
     (select-window (display-buffer buffer
-                                   `(display-buffer-pop-up-window
+                                   `(,(or display-buffer-fn
+                                          'display-buffer-pop-up-window)
                                      (window-width . ,width)
                                      (window-height . ,height))))
     (org-real-mode)
@@ -1173,7 +1180,6 @@ MARKER is the position of the first occurrence of the link."
   (let ((buffer (marker-buffer marker)))
     (lambda ()
       (interactive)
-      (delete-window)
       (if-let ((window (get-buffer-window buffer)))
           (select-window window)
         (switch-to-buffer buffer))
