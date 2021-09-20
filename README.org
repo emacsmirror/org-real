@@ -14,13 +14,10 @@ Keep track of real things as org-mode links.
 and
 
 =M-x package-install-file org-real-x.y.z.el=
-#+begin_src emacs-lisp
-  (require 'org-real)
-#+end_src
+
+=M-x load-library RET org-real=
 
 * Status *BETA*
-  - TODO ERT tests
-
 * Usage
 ** Inserting a link
    To create a real link in org-mode, use =C-c C-l real RET=.
@@ -96,6 +93,17 @@ and
 
    [[file:demo/open-links.gif]]
 
+   In the org real diagram, emacs movement keys will navigate by boxes
+   rather than characters. Each button in the diagram has three
+   options:
+
+   - RET / mouse-1
+     Jump to first occurrence of link
+   - o
+     Cycle occurrences of links in other window
+   - M-RET
+     Open all occurences of links by splitting the current window
+
 ** =org-real-world=
    
    To view all real links in the current buffer in a combined diagram,
@@ -107,3 +115,19 @@ and
 
    To view all headlines in an org-mode file as an org-real diagram,
    use the interactive function =org-real-headlines=
+
+   [[file:demo/headlines.gif]]
+
+   To modify the relationship between a headline and its parent, add
+   the property REL to the child headline. Valid values are:
+   - on top of
+   - in front of
+   - behind
+   - above
+   - below
+   - to the right of
+   - to the left of
+
+   [[file:demo/headline-relationships.png]]
+
+

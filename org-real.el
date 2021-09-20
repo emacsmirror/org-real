@@ -16,7 +16,17 @@
 ;; current buffer.
 ;;
 ;; The function `org-real-headlines' will display all headlines in the
-;; current org file as an org-real diagram.
+;; current org file as an org-real diagram.  The relationship between
+;; a headline and its parent can be set by using a REL property on the
+;; child headline.  Valid values for REL are:
+;;
+;;   - on top of
+;;   - in front of
+;;   - behind
+;;   - above
+;;   - below
+;;   - to the right of
+;;   - to the left of
 ;;
 ;; When in an Org Real mode diagram, the standard movement keys will
 ;; move by boxes rather than characters.  Each button has the
@@ -223,22 +233,22 @@ describing where BOX is."
         (height (org-real--get-height box))
         (inhibit-read-only t)
         (buffer (get-buffer-create "Org Real")))
-    (with-current-buffer buffer
-      (org-real-mode)
-      (erase-buffer)
-      (setq org-real--tab-ring '())
-      (if containers (org-real--pp-text containers))
-      (let ((offset (- (line-number-at-pos)
-                       org-real-margin-y
-                       (* 2 org-real-padding-y))))
-        (dotimes (_ (+ top height)) (insert (concat (make-string width ?\s) "\n")))
-        (org-real--draw box offset)
-        (goto-char 0)
-        (setq org-real--tab-ring
-              (seq-sort '< org-real--tab-ring))))
-    (display-buffer buffer `(display-buffer-pop-up-window
-                             (window-width . ,width)
-                             (window-height . ,height)))))
+    (select-window (display-buffer buffer
+                                   `(display-buffer-pop-up-window
+                                     (window-width . ,width)
+                                     (window-height . ,height))))
+    (org-real-mode)
+    (erase-buffer)
+    (setq org-real--tab-ring '())
+    (if containers (org-real--pp-text containers))
+    (let ((offset (- (line-number-at-pos)
+                     org-real-margin-y
+                     (* 2 org-real-padding-y))))
+      (dotimes (_ (+ top height)) (insert (concat (make-string width ?\s) "\n")))
+      (org-real--draw box offset)
+      (goto-char 0)
+      (setq org-real--tab-ring
+            (seq-sort '< org-real--tab-ring)))))
 
 (defun org-real--pp-text (containers)
   "Insert a textual representation of CONTAINERS into the current buffer."
@@ -1160,10 +1170,14 @@ MARKERS is a list of locations of each button in the buffer."
   "Jump to the first occurrence of a link in the same window.
 
 MARKER is the position of the first occurrence of the link."
-  (lambda ()
-    (interactive)
-    (switch-to-buffer (marker-buffer marker))
-    (goto-char (marker-position marker))))
+  (let ((buffer (marker-buffer marker)))
+    (lambda ()
+      (interactive)
+      (delete-window)
+      (if-let ((window (get-buffer-window buffer)))
+          (select-window window)
+        (switch-to-buffer buffer))
+      (goto-char (marker-position marker)))))
 
 (defun org-real--jump-all (markers)
   "View all occurrences of a link in the same window.
