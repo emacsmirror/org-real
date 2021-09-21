@@ -1396,7 +1396,7 @@ characters if possible."
                                       ((string= rel "on top of") -1.0e+INF)
                                       (t 0))
                             :primary t)))
-    (if (= 1 (oref parent :level))
+    (if (= 1 (with-slots (level) parent level))
         (org-real--flex-add box parent)
       (org-real--add-next box parent))
     (mapc
