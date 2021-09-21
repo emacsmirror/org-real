@@ -26,7 +26,7 @@ and
    item and working to the most general.
 
    #+begin_example
-  
+
        ┌──────────────────────────────┐
        │                              │
        │           outside            │
@@ -83,19 +83,18 @@ and
    This makes it easy to keep things in sync. If any one link changes
    location, all links in the currnet buffer are updated accordingly.
 
-   [[file:demo/edit-link-apply-changes.gif]]
-   
-** Opening links
+   [[file:demo/apply-changes.gif]]
+
+** Org Real mode
 
    To open a real link, place the cursor within the link and press
-   =C-c C-o=. This will display a popup buffer showing the location of
-   the thing described by the link.
-
-   [[file:demo/open-links.gif]]
+   =C-c C-o=. This will display a popup buffer in Org Real mode
+   showing the location of the link. Use =S-TAB= to cycle the
+   visibility level of all children or just =TAB= to toggle the
+   visibility of children for a single box.
 
    In the org real diagram, emacs movement keys will navigate by boxes
-   rather than characters. Each button in the diagram has three
-   options:
+   rather than characters. Each box in the diagram has these options:
 
    - RET / mouse-1
      Jump to first occurrence of link
@@ -104,19 +103,17 @@ and
    - M-RET
      Open all occurences of links by splitting the current window
 
+   [[file:demo/org-real-mode.gif]]
+
 ** =org-real-world=
-   
+
    To view all real links in the current buffer in a combined diagram,
    use the interactive function =org-real-world=
 
-   [[file:demo/garage.svg]]
-   
 ** =org-real-headlines=
 
    To view all headlines in an org-mode file as an org-real diagram,
    use the interactive function =org-real-headlines=
-
-   [[file:demo/headlines.gif]]
 
    To modify the relationship between a headline and its parent, add
    the property REL to the child headline. Valid values are:
@@ -129,5 +126,3 @@ and
    - to the left of
 
    [[file:demo/headline-relationships.png]]
-
-
