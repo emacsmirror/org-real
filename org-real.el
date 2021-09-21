@@ -121,11 +121,14 @@
 
 ;;;; Faces
 
-(defface org-real-primary
-  '((t :background "aquamarine"
-       :foreground "black"))
+(defface org-real-primary nil
   "Face for the last thing in a real link."
   :group 'org-real)
+
+(face-spec-set
+ 'org-real-primary
+ '((t :foreground "light slate blue"))
+ 'face-defface-spec)
 
 ;;;; Constants & variables
 
