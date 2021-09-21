@@ -270,7 +270,8 @@ The following commands are available:
 
 \\{org-real-mode-map}"
   :group 'org-mode
-  (toggle-truncate-lines t))
+  (let ((inhibit-message t))
+    (toggle-truncate-lines t)))
 
 (mapc
  (lambda (key) (define-key org-real-mode-map (kbd (car key)) (cdr key)))
@@ -631,7 +632,7 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
 (cl-defmethod org-real--make-instance ((_ (subclass org-real-box))
                                        containers
                                        &optional skip-primary)
-  "Create an instance of `org-real-box' from CONTAINERS.
+  "Create an instance of an org real box from CONTAINERS.
 
 CONTAINERS is a list of plists containing at least a :name
 property and optionally a :rel property.  If SKIP-PRIMARY is
@@ -1550,7 +1551,7 @@ set to the :loc slot of each box."
 
 
 (defun org-real--parse-headlines ()
-  "Create an org-real-box from the current buffer's headlines."
+  "Create an org real box from the current buffer's headlines."
   (let ((headlines (cddr (org-element-parse-buffer 'headline)))
         (world (org-real-box :level 1)))
     (mapc
