@@ -326,11 +326,12 @@ visibility."
       (let* ((width (apply 'max (mapcar 'length (split-string (buffer-string) "\n"))))
              (height (count-lines (point-min) (point-max)))
              (buffer (get-buffer-create "Org Real"))
-             (window (display-buffer buffer
-                                     `(,(or display-buffer-fn
-                                            'display-buffer-pop-up-window)
-                                       (window-width . ,width)
-                                       (window-height . ,height)))))
+             (window (or (get-buffer-window buffer)
+                         (display-buffer buffer
+                                         `(,(or display-buffer-fn
+                                                'display-buffer-pop-up-window)
+                                           (window-width . ,width)
+                                           (window-height . ,height))))))
         (if select (select-window window))))))
 
 (defun org-real--pp-text (containers)
