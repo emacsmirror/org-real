@@ -449,7 +449,7 @@ EXISTING containers will be excluded from the completion."
         existing-containers
       `((:name ,result :loc ,(point-marker))))))
 
-;;; Hooks
+;;; Hooks and advice
 
 (defun org-real--read-string-advice (orig prompt link &rest args)
   "Advise `read-string' during `org-insert-link' to use custom completion.
