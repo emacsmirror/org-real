@@ -1,7 +1,7 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 0.3.0
+;; Version: 0.3.1
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
@@ -245,9 +245,7 @@ MAX-LEVEL is the maximum level to show headlines for."
   "Redraw `org-real--current-box' in the current buffer."
   (org-real--make-dirty org-real--current-box)
   (org-real--flex-adjust org-real--current-box)
-  (let ((width (org-real--get-width org-real--current-box))
-        (height (org-real--get-height org-real--current-box t))
-        (inhibit-read-only t))
+  (let ((inhibit-read-only t))
     (erase-buffer)
     (setq org-real--box-ring '())
     (if org-real--current-containers
@@ -255,11 +253,19 @@ MAX-LEVEL is the maximum level to show headlines for."
     (setq org-real--current-offset (- (line-number-at-pos)
                                       org-real-margin-y
                                       (* 2 org-real-padding-y)))
-    (dotimes (_ height) (insert (concat (make-string width ?\s) "\n")))
-    (org-real--draw org-real--current-box)
-    (goto-char 0)
-    (setq org-real--box-ring
-          (seq-sort '< org-real--box-ring))))
+    (let ((box-coords (org-real--draw org-real--current-box)))
+      (setq org-real--box-ring
+            (seq-sort
+             '<
+             (mapcar
+              (lambda (coords)
+                (forward-line (- (car coords) (line-number-at-pos)))
+                (move-to-column (cdr coords))
+                (point))
+              box-coords))))
+    (goto-char (point-max))
+    (insert "\n")
+    (goto-char 0)))
 
 (define-derived-mode org-real-mode special-mode
   "Org Real"
@@ -269,8 +275,8 @@ The following commands are available:
 
 \\{org-real-mode-map}"
   :group 'org-mode
-  (let ((inhibit-message t))
-    (toggle-truncate-lines t)))
+  (setq indent-tabs-mode nil)
+  (let ((inhibit-message t)) (toggle-truncate-lines t)))
 
 (mapc
  (lambda (key) (define-key org-real-mode-map (kbd (car key)) (cdr key)))
@@ -680,7 +686,8 @@ OFFSET is the starting line to start insertion.
 
 Adds to list `org-real--box-ring' the buffer position of each
 button drawn."
-  (let ((children (with-slots (children) box (org-real--get-all children))))
+  (let ((children (with-slots (children) box (org-real--get-all children)))
+        box-coords)
     (with-slots
         (name
          behind
@@ -700,22 +707,32 @@ button drawn."
                (align-bottom (or in-front on-top)))
           (cl-flet* ((draw (coords str &optional primary)
                            (forward-line (- (car coords) (line-number-at-pos)))
+                           (when (< (line-number-at-pos) (car coords))
+                             (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
                            (move-to-column (cdr coords) t)
                            (if primary (put-text-property 0 (length str)
                                                           'face 'org-real-primary str))
                            (insert str)
-                           (delete-char (length str)))
+                           (let ((remaining-chars (- (save-excursion (end-of-line) (current-column))
+                                                     (current-column))))
+                             (delete-char (min (length str) remaining-chars))))
                      (draw-name (coords str &optional primary)
-                                (if (not locations) (draw coords str)
+                                (if (not locations)
+                                    (draw coords str primary)
                                   (forward-line (- (car coords) (line-number-at-pos)))
+                                  (when (< (line-number-at-pos) (car coords))
+                                    (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
                                   (move-to-column (cdr coords) t)
-                                  (add-to-list 'org-real--box-ring (point))
+                                  (setq box-coords coords)
                                   (if primary (put-text-property 0 (length str)
                                                                  'face 'org-real-primary str))
                                   (insert-button str
                                                  'help-echo "Jump to first occurence"
                                                  'keymap (org-real--create-button-keymap box))
-                                  (delete-char (length str)))))
+                                  (let ((remaining-chars (- (save-excursion (end-of-line)
+                                                                            (current-column))
+                                                            (current-column))))
+                                    (delete-char (min (length str) remaining-chars))))))
             (draw (cons top left)
                   (concat (if double "╔" "┌")
                           (make-string (- width 2) (cond (dashed #x254c)
@@ -749,7 +766,9 @@ button drawn."
                                         (double "║")
                                         (t "│")))
                 (setq r (+ r 1))))))))
-    (mapc 'org-real--draw children)))
+    (apply 'append
+           (if box-coords (list box-coords) nil)
+           (mapcar 'org-real--draw children))))
 
 (cl-defmethod org-real--get-width ((box org-real-box))
   "Get the width of BOX."
