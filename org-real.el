@@ -1559,8 +1559,8 @@ set to the :loc slot of each box."
 (defun org-real--parse-headlines ()
   "Create an org real box from the current buffer's headlines."
   (let* ((headlines (cddr (org-element-parse-buffer 'headline)))
-         (title (or (cadr (car (org-collect-keywords '("TITLE"))))
-                    (file-name-base (buffer-file-name))
+         (filename (buffer-file-name))
+         (title (or (concat (file-name-base filename) "." (file-name-extension filename))
                     "Document"))
          (world (org-real-box))
          (document (org-real-box :name title)))
