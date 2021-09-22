@@ -122,6 +122,10 @@ Keep track of real things as org-mode links.
 
    [[file:demo/apply-changes.gif]]
 
+   If a link is changed manually, use the interactive function
+   =org-real-apply= with the cursor on top of the new link to apply
+   changes from that link to the buffer.
+
 ** Org Real mode
 
    To open a real link, place the cursor within the link and press

@@ -78,6 +78,12 @@
 (unintern 'org-real--add-matching nil)
 (unintern 'org-real--flex-add nil)
 
+;;;; Patch! 0.3.0 > 0.3.1+
+;;;; Will be removed in version 1.0.0+
+
+(and (fboundp 'org-real--apply) (advice-remove 'org-insert-link #'org-real--apply))
+(and (fboundp 'org-real--maybe-edit-link) (advice-remove 'org-insert-link #'org-real--maybe-edit-link))
+
 ;;;; Customization variables
 
 (defgroup org-real nil
@@ -159,6 +165,82 @@ MAX-LEVEL is the maximum level to show headlines for."
    nil
    'display-buffer-same-window
    t 1 2))
+
+(defun org-real-apply ()
+  "Apply any change from the real link at point to the current buffer."
+  (interactive)
+  (let (new-link replace-all)
+    (cond
+     ((org-in-regexp org-link-bracket-re 1)
+      (setq new-link (match-string-no-properties 1)))
+     ((org-in-regexp org-link-plain-re)
+      (setq new-link (org-unbracket-string "<" ">" (match-string 0)))))
+    (when (and new-link
+               (string= "real" (ignore-errors (url-type (url-generic-parse-url new-link)))))
+      (let ((new-containers (reverse (org-real--parse-url new-link (point-marker)))))
+        (while new-containers
+          (let ((primary (plist-get (car new-containers) :name))
+                (changes '())
+                old-containers)
+            (org-element-map (org-element-parse-buffer) 'link
+              (lambda (old-link)
+                (when (string= (org-element-property :type old-link) "real")
+                  (setq old-containers (reverse (org-real--parse-url
+                                                 (org-element-property :raw-link old-link)
+                                                 (set-marker (point-marker) (org-element-property :begin old-link)))))
+                  (when-let* ((new-index 0)
+                              (old-index (seq-position
+                                          old-containers
+                                          primary
+                                          (lambda (a b) (string= (plist-get a :name) b))))
+                              (begin (org-element-property :begin old-link))
+                              (end (org-element-property :end old-link))
+                              (replace-link (org-real--to-link
+                                             (reverse
+                                              (append (cl-subseq old-containers 0 old-index)
+                                                      new-containers)))))
+                    (when (catch 'conflict
+                            (if (not (= (length new-containers) (- (length old-containers) old-index)))
+                                (throw 'conflict t))
+                            (while (< new-index (length new-containers))
+                              (if (or (not (string= (plist-get (nth new-index new-containers) :name)
+                                                    (plist-get (nth old-index old-containers) :name)))
+                                      (not (string= (plist-get (nth new-index new-containers) :rel)
+                                                    (plist-get (nth old-index old-containers) :rel))))
+                                  (throw 'conflict t))
+                              (setq new-index (+ 1 new-index))
+                              (setq old-index (+ 1 old-index)))
+                            nil)
+                      (let* ((old-desc (save-excursion
+                                         (and (goto-char begin)
+                                              (org-in-regexp org-link-bracket-re 1)
+                                              (match-end 2)
+                                              (match-string-no-properties 2))))
+                             (new-link (org-real--link-make-string replace-link old-desc)))
+                        (push
+                         `(lambda ()
+                            (save-excursion
+                              (delete-region ,begin ,end)
+                              (goto-char ,begin)
+                              (insert ,new-link)))
+                         changes)))))))
+            (when (and changes
+                       (or replace-all (let ((response
+                                              (read-char-choice
+                                               (concat
+                                                "Replace all occurrences of "
+                                                primary
+                                                " in current buffer? y/n/a ")
+                                               '(?y ?Y ?n ?N ?a ?A)
+                                               t)))
+                                         (cond
+                                          ((or (= response ?y) (= response ?Y)) t)
+                                          ((or (= response ?n) (= response ?N)) nil)
+                                          ((or (= response ?a) (= response ?A))
+                                           (setq replace-all t))))))
+              (mapc 'funcall changes)))
+          (pop new-containers)))))
+  (message nil))
 
 ;;;; Org Real mode
 
@@ -455,7 +537,7 @@ EXISTING containers will be excluded from the completion."
         existing-containers
       `((:name ,result :loc ,(point-marker))))))
 
-;;; Hooks and advice
+;;; Advice
 
 (defun org-real--read-string-advice (orig prompt link &rest args)
   "Advise `read-string' during `org-insert-link' to use custom completion.
@@ -466,95 +548,30 @@ passed to it."
       (org-real-complete link)
     (apply orig prompt link args)))
 
-(defun org-real--maybe-edit-link (orig &rest args)
+(defun org-real--insert-link-advice (orig &rest args)
   "Advise `org-insert-link' to advise `read-string' during editing of a link.
 
 ORIG is `org-insert-link', ARGS are the arguments passed to it."
   (advice-add 'read-string :around #'org-real--read-string-advice)
-  (unwind-protect
-      (if (called-interactively-p 'any)
-          (call-interactively orig)
-        (apply orig args))
-    (advice-remove 'read-string #'org-real--read-string-advice)))
+  (let* ((old-desc-fn org-link-make-description-function)
+         (org-link-make-description-function (lambda (link desc)
+                                               (cond
+                                                (old-desc-fn (funcall old-desc-fn link desc))
+                                                (desc)
+                                                ((string= "real"
+                                                          (ignore-errors
+                                                            (url-type
+                                                             (url-generic-parse-url link))))
+                                                 (plist-get (car (last (org-real--parse-url link nil)))
+                                                            :name))))))
+    (unwind-protect
+        (if (called-interactively-p 'any)
+            (call-interactively orig)
+          (apply orig args))
+      (advice-remove 'read-string #'org-real--read-string-advice)))
+  (org-real-apply))
 
-(advice-add 'org-insert-link :around #'org-real--maybe-edit-link)
-
-(defun org-real--apply (&rest _)
-  "Apply any change to the current buffer if last inserted link is real."
-  (let (new-link replace-all)
-    (cond
-     ((org-in-regexp org-link-bracket-re 1)
-      (setq new-link (match-string-no-properties 1)))
-     ((org-in-regexp org-link-plain-re)
-      (setq new-link (org-unbracket-string "<" ">" (match-string 0)))))
-    (when (and new-link
-               (string= "real" (ignore-errors (url-type (url-generic-parse-url new-link)))))
-      (let ((new-containers (reverse (org-real--parse-url new-link (point-marker)))))
-        (while new-containers
-          (let ((primary (plist-get (car new-containers) :name))
-                (changes '())
-                old-containers)
-            (org-element-map (org-element-parse-buffer) 'link
-              (lambda (old-link)
-                (when (string= (org-element-property :type old-link) "real")
-                  (setq old-containers (reverse (org-real--parse-url
-                                                 (org-element-property :raw-link old-link)
-                                                 (set-marker (point-marker) (org-element-property :begin old-link)))))
-                  (when-let* ((new-index 0)
-                              (old-index (seq-position
-                                          old-containers
-                                          primary
-                                          (lambda (a b) (string= (plist-get a :name) b))))
-                              (begin (org-element-property :begin old-link))
-                              (end (org-element-property :end old-link))
-                              (replace-link (org-real--to-link
-                                             (reverse
-                                              (append (cl-subseq old-containers 0 old-index)
-                                                      new-containers)))))
-                    (when (catch 'conflict
-                            (if (not (= (length new-containers) (- (length old-containers) old-index)))
-                                (throw 'conflict t))
-                            (while (< new-index (length new-containers))
-                              (if (or (not (string= (plist-get (nth new-index new-containers) :name)
-                                                    (plist-get (nth old-index old-containers) :name)))
-                                      (not (string= (plist-get (nth new-index new-containers) :rel)
-                                                    (plist-get (nth old-index old-containers) :rel))))
-                                  (throw 'conflict t))
-                              (setq new-index (+ 1 new-index))
-                              (setq old-index (+ 1 old-index)))
-                            nil)
-                      (let* ((old-desc (save-excursion
-                                         (and (goto-char begin)
-                                              (org-in-regexp org-link-bracket-re 1)
-                                              (match-end 2)
-                                              (match-string-no-properties 2))))
-                             (new-link (org-real--link-make-string replace-link old-desc)))
-                        (push
-                         `(lambda ()
-                            (save-excursion
-                              (delete-region ,begin ,end)
-                              (goto-char ,begin)
-                              (insert ,new-link)))
-                         changes)))))))
-            (when (and changes
-                       (or replace-all (let ((response
-                                              (read-char-choice
-                                               (concat
-                                                "Replace all occurrences of "
-                                                primary
-                                                " in current buffer? y/n/a ")
-                                               '(?y ?Y ?n ?N ?a ?A)
-                                               t)))
-                                         (cond
-                                          ((or (= response ?y) (= response ?Y)) t)
-                                          ((or (= response ?n) (= response ?N)) nil)
-                                          ((or (= response ?a) (= response ?A))
-                                           (setq replace-all t))))))
-              (mapc 'funcall changes)))
-          (pop new-containers)))))
-  (message nil))
-
-(advice-add 'org-insert-link :after #'org-real--apply)
+(advice-add 'org-insert-link :around #'org-real--insert-link-advice)
 
 ;;;; Class definitions and public methods
 
