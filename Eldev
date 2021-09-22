@@ -1,8 +1,8 @@
 ; -*- mode: emacs-lisp; lexical-binding: t -*-
 
 (eldev-defcommand
- org_real-md5 (&rest parameters)
- "Create md5 checksum of tar files in dist folder"
+ org_real-md5 (&rest _)
+ "Create md5 checksum of .tar and .el files in dist folder."
  (mapc
   (lambda (file)
     (write-region
@@ -12,3 +12,67 @@
   (append
    (directory-files eldev-dist-dir t "\\.tar\\'")
    (directory-files eldev-dist-dir t "\\.el\\'"))))
+
+(eldev-defcommand
+ org_real-test (&rest _)
+ "Runs tests against all org files in tests folder."
+ :override t
+ (require 'cl-lib)
+ (require 'org-element)
+ (load-file "org-real.el")
+ (let ((failures 0))
+   (cl-flet ((get-expected ()
+                           (save-excursion
+                             (re-search-forward "#\\+begin_example")
+                             (org-element-property :value (org-element-at-point))))
+             (get-actual ()
+                         (with-current-buffer (get-buffer "Org Real")
+                           (buffer-string)))
+             (print-result (title result)
+                           (message "    %s : %s"
+                                    (if result
+                                        "\033[0;32mPASS\033[0m"
+                                      "\033[0;31mFAIL\033[0m")
+                                    title))
+             (set-result (result)
+                         (if (not result) (cl-incf failures))
+                         (let ((inhibit-message t))
+                           (org-todo (if result "PASS" "FAIL")))))
+     (mapc
+      (lambda (test)
+        (with-temp-file test
+          (message "%s:" (file-name-base test))
+          (insert-file-contents test)
+          (org-mode)
+
+          (message "  Opening links:")
+          (org-element-map (org-element-parse-buffer) 'link
+            (lambda (link)
+              (goto-char (org-element-property :begin link))
+              (let ((title (and (org-in-regexp org-link-bracket-re)
+                                (match-string 2)))
+                    (result (catch 'result
+                              (save-window-excursion
+                                (condition-case nil
+                                    (org-open-at-point)
+                                  (error (throw 'result nil))))
+                              (string= (get-expected) (get-actual)))))
+                (print-result title result)
+                (set-result result))))
+
+          (message "  Merging links:")
+          (org-babel-map-src-blocks nil
+            (goto-char beg-block)
+            (let ((title (org-entry-get nil "ITEM"))
+                  (result (catch 'result
+                            (save-window-excursion
+                              (condition-case nil
+                                  (progn
+                                    (org-edit-special)
+                                    (org-real-world))
+                                (error (throw 'result nil))))
+                            (string= (get-expected) (get-actual)))))
+              (print-result title result)
+              (set-result result)))))
+      (directory-files "tests" t "\\.org\\'"))
+   (and (> failures 0) (error "Test run had failures")))))

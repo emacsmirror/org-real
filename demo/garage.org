@@ -1,4 +1,5 @@
 * Items in the garage
+  - [[real://garage/workbench?rel=in][workbench]]
   - [[real://garage/workbench?rel=in/paintbrush?rel=in front of][paintbrush]]
   - [[real://garage/workbench?rel=in/paintbrush?rel=in front of/wrench?rel=to the left of][wrench]]
   - [[real://garage/workbench?rel=in/nails?rel=on top of/screwdriver?rel=on top of][screwdriver]]
@@ -9,9 +10,8 @@
   - [[real://garage/east wall?rel=in/rake?rel=on/hoe?rel=to the left of][hoe]]
   - [[real://garage/car?rel=in/air freshener?rel=in][air freshener]]
   - [[real://garage/workbench?rel=in/nails?rel=on top of][nails]]
-  - [[real://garage/workbench?rel=in][workbench]]
   - [[real://garage/east wall?rel=in][East wall]]
   - [[real://garage/east wall?rel=in/rake?rel=on/hoe?rel=to the left of/snowblower?rel=above][snowblower]]
   - [[real://garage/workbench?rel=in/hammer?rel=on/screws?rel=to the right of][screws]]
-  - [[real://garage/workbench?rel=in/hammer?rel=on/screws?rel=to the right of/saw?rel=above][saw]]
-  - [[real://garage/workbench?rel=in/paintbrush?rel=in front of/wrench?rel=to the left of/pliers?rel=to the left of][pliers]]
+  - [[real://garage/saw?rel=on][saw]]
+  - [[real://garage/workbench?rel=in/hammer?rel=on/screws?rel=to the right of/pliers?rel=above][pliers]]
