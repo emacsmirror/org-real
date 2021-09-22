@@ -1558,11 +1558,16 @@ set to the :loc slot of each box."
 
 (defun org-real--parse-headlines ()
   "Create an org real box from the current buffer's headlines."
-  (let ((headlines (cddr (org-element-parse-buffer 'headline)))
-        (world (org-real-box :level 1)))
+  (let* ((headlines (cddr (org-element-parse-buffer 'headline)))
+         (title (or (cadr (car (org-collect-keywords '("TITLE"))))
+                    (file-name-base (buffer-file-name))
+                    "Document"))
+         (world (org-real-box))
+         (document (org-real-box :name title)))
+    (org-real--flex-add document world)
     (mapc
      (lambda (headline)
-        (org-real--add-headline headline world))
+        (org-real--add-headline headline document))
      headlines)
     world))
 
