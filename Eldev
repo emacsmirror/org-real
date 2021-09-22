@@ -21,31 +21,49 @@
  (require 'org-element)
  (load-file "org-real.el")
  (let ((failures 0))
-   (cl-flet ((get-expected ()
-                           (save-excursion
-                             (re-search-forward "#\\+begin_example")
-                             (org-element-property :value (org-element-at-point))))
-             (get-actual ()
-                         (with-current-buffer (get-buffer "Org Real")
-                           (buffer-string)))
-             (print-result (title result)
-                           (message "    %s : %s"
-                                    (if result
-                                        "\033[0;32mPASS\033[0m"
-                                      "\033[0;31mFAIL\033[0m")
-                                    title))
-             (set-result (result)
-                         (if (not result) (cl-incf failures))
-                         (let ((inhibit-message t))
-                           (org-todo (if result "PASS" "FAIL")))))
+   (cl-flet* ((get-expected ()
+                            (save-excursion
+                              (re-search-forward "#\\+begin_example")
+                              (org-element-property :value (org-element-at-point))))
+              (get-actual ()
+                          (with-current-buffer (get-buffer "Org Real")
+                            (buffer-string)))
+              (print-result (title result)
+                            (message "    %s : %s"
+                                     (if result
+                                         "\033[0;32mPASS\033[0m"
+                                       "\033[0;31mFAIL\033[0m")
+                                     title)
+                            (if (not result)
+                                (let ((expected (get-expected)))
+                                  (save-window-excursion
+                                    (with-temp-buffer
+                                      (insert expected)
+                                      (diff-buffers (get-buffer "Org Real")
+                                                    (current-buffer)
+                                                    nil t))
+                                    (with-current-buffer (get-buffer "*Diff*")
+                                      (message
+                                       (string-join
+                                        (butlast
+                                         (butlast
+                                          (cdddr
+                                           (split-string
+                                            (buffer-string)
+                                            "\n"))))
+                                          "\n")))))))
+              (set-result (result)
+                          (if (not result) (cl-incf failures))
+                          (let ((inhibit-message t))
+                            (org-todo (if result "PASS" "FAIL")))))
      (mapc
       (lambda (test)
         (with-temp-file test
-          (message "%s:" (file-name-base test))
+          (message "\n%s:\n" (file-name-base test))
           (insert-file-contents test)
           (org-mode)
 
-          (message "  Opening links:")
+          (message "  Opening links:\n")
           (org-element-map (org-element-parse-buffer) 'link
             (lambda (link)
               (goto-char (org-element-property :begin link))
@@ -60,7 +78,7 @@
                 (print-result title result)
                 (set-result result))))
 
-          (message "  Merging links:")
+          (message "\n  Merging links:\n")
           (org-babel-map-src-blocks nil
             (goto-char beg-block)
             (let ((title (org-entry-get nil "ITEM"))
