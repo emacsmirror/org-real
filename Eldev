@@ -55,8 +55,8 @@
                               (save-window-excursion
                                 (condition-case nil
                                     (org-open-at-point)
-                                  (error (throw 'result nil)))
-                                (string= (get-expected) (get-actual))))))
+                                  (error (throw 'result nil))))
+                              (string= (get-expected) (get-actual)))))
                 (print-result title result)
                 (set-result result))))
 

@@ -245,9 +245,8 @@ MAX-LEVEL is the maximum level to show headlines for."
   "Redraw `org-real--current-box' in the current buffer."
   (org-real--make-dirty org-real--current-box)
   (org-real--flex-adjust org-real--current-box)
-  (let ((top (org-real--get-top org-real--current-box))
-        (width (org-real--get-width org-real--current-box))
-        (height (org-real--get-height org-real--current-box))
+  (let ((width (org-real--get-width org-real--current-box))
+        (height (org-real--get-height org-real--current-box t))
         (inhibit-read-only t))
     (erase-buffer)
     (setq org-real--box-ring '())
@@ -256,7 +255,7 @@ MAX-LEVEL is the maximum level to show headlines for."
     (setq org-real--current-offset (- (line-number-at-pos)
                                       org-real-margin-y
                                       (* 2 org-real-padding-y)))
-    (dotimes (_ (+ top height)) (insert (concat (make-string width ?\s) "\n")))
+    (dotimes (_ height) (insert (concat (make-string width ?\s) "\n")))
     (org-real--draw org-real--current-box)
     (goto-char 0)
     (setq org-real--box-ring
@@ -796,21 +795,28 @@ button drawn."
               (setq stored-width (+ base-width children-width)))))))))
 
 (cl-defmethod org-real--get-on-top-height ((box org-real-box))
-  "Get the height of any boxes on top of the parent of BOX."
-  (with-slots (children rel) box
+  "Get the height of any boxes on top of BOX."
+  (apply 'max 0
+         (mapcar
+          'org-real--get-on-top-height-helper
+          (seq-filter
+           (lambda (child) (with-slots (rel) child (and (slot-boundp child :rel)
+                                                        (string= rel "on top of"))))
+           (with-slots (children) box (org-real--get-all children))))))
+
+(cl-defmethod org-real--get-on-top-height-helper ((child org-real-box))
+  "Get the height of any boxes on top of CHILD, including child."
+  (with-slots (children rel) child
     (+
-     (if (and (slot-boundp box :rel)
-              (string= "on top of" rel))
-         (org-real--get-height box)
-       0)
+     (org-real--get-height child)
      (apply 'max 0
             (mapcar
-             'org-real--get-on-top-height
+             'org-real--get-on-top-height-helper
              (seq-filter
-              (lambda (child)
-                (with-slots ((child-rel rel)) child
-                  (and (slot-boundp child :rel)
-                       (string= "on top of" child-rel))))
+              (lambda (grandchild)
+                (with-slots ((grandchild-rel rel)) grandchild
+                  (and (slot-boundp grandchild :rel)
+                       (string= "on top of" grandchild-rel))))
               (org-real--get-all children)))))))
 
 (cl-defmethod org-real--get-height ((box org-real-box) &optional include-on-top)
@@ -831,27 +837,26 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
               (progn
                 (setq stored-height height)
                 (+ height on-top-height))
-            (let* ((last-row (seq-reduce
-                              (lambda (last-row child)
-                                (with-slots ((last-y y-order)) (car last-row)
-                                  (with-slots ((child-y y-order)) child
-                                    (cond ((= last-y child-y)
-                                           (push child last-row)
-                                           last-row)
-                                          ((> child-y last-y) (list child))
-                                          (t last-row)))))
-                              children
-                              (list (pop children))))
-                   (last-row-top (org-real--get-top (car last-row)))
-                   (last-row-height (apply 'max (mapcar
+            (let* ((row-indices (cl-delete-duplicates
+                                 (mapcar
+                                  (lambda (child) (with-slots (y-order) child y-order))
+                                  children)))
+                   (children-height (seq-reduce
+                                     (lambda (sum row)
+                                       (+ sum org-real-padding-y row))
+                                     (mapcar
+                                      (lambda (r)
+                                        (apply 'max 0
+                                               (mapcar
+                                                (lambda (child) (org-real--get-height child t))
+                                                (seq-filter
                                                  (lambda (child)
-                                                   (org-real--get-height child include-on-top))
-                                                 last-row))))
-              (setq stored-height (-
-                                   (+ (if in-front 0 org-real-padding-y)
-                                      last-row-top
-                                      last-row-height)
-                                   (org-real--get-top box)))
+                                                   (with-slots (y-order) child (= r y-order)))
+                                                 children))))
+                                      row-indices)
+                                     (* -1 org-real-padding-y))))
+
+              (setq stored-height (+ height children-height))
               (+ stored-height on-top-height))))))))
 
 (cl-defmethod org-real--get-top ((box org-real-box))
@@ -886,14 +891,14 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                                                   above)))
                                             siblings
                                             '()))
-                           (above-height (+ org-real-margin-y
-                                            (apply 'max
-                                                   (mapcar
-                                                    'org-real--get-height
-                                                    directly-above)))))
-                     (setq stored-top (+ on-top-height
-                                         (org-real--get-top (car directly-above))
-                                         above-height))
+                           (above-bottom (+ org-real-margin-y
+                                             (apply 'max
+                                                    (mapcar
+                                                     (lambda (sibling)
+                                                       (+ (org-real--get-top sibling)
+                                                          (org-real--get-height sibling)))
+                                                     directly-above)))))
+                     (setq stored-top (+ on-top-height above-bottom))
                    (setq stored-top top)))))))))
 
 (cl-defmethod org-real--get-left ((box org-real-box))
@@ -947,8 +952,6 @@ PREV must already exist in PARENT."
          (rel (plist-get container :rel))
          (box (org-real-box
                :name (plist-get container :name)
-               :rel (plist-get container :rel)
-               :rel-box prev
                :locations (list (plist-get container :loc)))))
     (with-slots
         ((cur-x x-order)
@@ -967,73 +970,76 @@ PREV must already exist in PARENT."
              (prev-in-front in-front))
             prev
           (with-slots ((siblings children) (hidden-siblings hidden-children)) parent
-            (let ((row-siblings (seq-filter
-                                 (lambda (sibling)
-                                   (with-slots (y-order) sibling
-                                     (= prev-y y-order)))
-                                 (append (org-real--get-all siblings)
-                                         (org-real--get-all hidden-siblings))))
-                  (sibling-y-orders (mapcar
-                                     (lambda (sibling) (with-slots (y-order) sibling y-order))
-                                     (seq-filter
-                                      (lambda (sibling)
-                                        (with-slots (in-front on-top) sibling
-                                          (not (or in-front on-top))))
-                                      (append (org-real--get-all siblings)
-                                              (org-real--get-all hidden-siblings))))))
-              (cond ((or (string= rel "in") (string= rel "on"))
-                     (setq cur-level (+ 1 prev-level))
-                     (setq cur-behind prev-behind))
-                    ((string= rel "behind")
-                     (setq cur-level (+ 1 prev-level))
-                     (setq cur-behind t))
-                    ((string= rel "in front of")
-                     (setq cur-level (+ 1 prev-level))
-                     (setq cur-y 1.0e+INF)
-                     (setq cur-behind prev-behind)
-                     (setq cur-in-front t))
-                    ((string= rel "on top of")
-                     (setq cur-level (+ 1 prev-level))
-                     (setq cur-y -1.0e+INF)
-                     (setq cur-behind prev-behind)
-                     (setq cur-on-top t))
-                    ((string= rel "above")
-                     (setq cur-level prev-level)
-                     (setq cur-x prev-x)
-                     (setq cur-y (- (apply 'min 0 sibling-y-orders) 1))
-                     (setq cur-behind prev-behind))
-                    ((string= rel "below")
-                     (setq cur-level prev-level)
-                     (setq cur-x prev-x)
-                     (setq cur-y (+ 1 (apply 'max 0 sibling-y-orders)))
-                     (setq cur-behind prev-behind)
-                     (setq cur-in-front prev-in-front))
-                    ((string= rel "to the left of")
-                     (setq cur-level prev-level)
-                     (setq cur-x prev-x)
-                     (mapc
-                      (lambda (sibling)
-                        (with-slots (x-order) sibling
-                          (if (>= x-order cur-x)
-                              (setq x-order (+ 1 x-order)))))
-                      row-siblings)
-                     (setq cur-y prev-y)
-                     (setq cur-behind prev-behind)
-                     (setq cur-on-top prev-on-top)
-                     (setq cur-in-front prev-in-front))
-                    ((string= rel "to the right of")
-                     (setq cur-level prev-level)
-                     (setq cur-x (+ 1 prev-x))
-                     (mapc
-                      (lambda (sibling)
-                      (with-slots (x-order) sibling
-                        (if (>= x-order cur-x)
-                            (setq x-order (+ 1 x-order)))))
-                      row-siblings)
-                     (setq cur-y prev-y)
-                     (setq cur-behind prev-behind)
-                     (setq cur-on-top prev-on-top)
-                     (setq cur-in-front prev-in-front)))
+            (let (sibling-y-orders row-siblings)
+              (cond
+               ((or (string= rel "in") (string= rel "on"))
+                (setq cur-level (+ 1 prev-level))
+                (setq cur-behind prev-behind))
+               ((string= rel "behind")
+                (setq cur-level (+ 1 prev-level))
+                (setq cur-behind t))
+               ((string= rel "in front of")
+                (setq cur-level (+ 1 prev-level))
+                (setq cur-y 1.0e+INF)
+                (setq cur-behind prev-behind)
+                (setq cur-in-front t))
+               ((string= rel "on top of")
+                (setq cur-level (+ 1 prev-level))
+                (setq cur-y -1.0e+INF)
+                (setq cur-behind prev-behind)
+                (setq cur-on-top t))
+               ((member rel '("above" "below"))
+                (setq cur-behind prev-behind)
+                (setq cur-x prev-x)
+                (cond
+                 ((and prev-in-front (string= rel "below"))
+                  (while (with-slots (in-front) prev in-front)
+                    (setq prev (with-slots (parent) prev parent)))
+                  (setq parent (with-slots (parent) prev parent)))
+                 ((and prev-on-top (string= rel "above"))
+                  (while (with-slots (on-top) prev on-top)
+                      (setq prev (with-slots (parent) prev parent)))
+                  (setq parent (with-slots (parent) prev parent)))
+                 ((and prev-on-top (string= rel "below"))
+                  (setq rel "in")
+                  (setq prev parent)))
+                (setq cur-level (+ 1 (with-slots (level) parent level)))
+                (setq sibling-y-orders
+                      (with-slots ((siblings children) (hidden-siblings hidden-children)) parent
+                        (mapcar
+                         (lambda (sibling) (with-slots (y-order) sibling y-order))
+                         (seq-filter
+                          (lambda (sibling)
+                            (with-slots (in-front on-top) sibling
+                              (not (or in-front on-top))))
+                          (append (org-real--get-all siblings)
+                                  (org-real--get-all hidden-siblings))))))
+                (if (or prev-on-top (string= rel "above"))
+                    (setq cur-y (- (apply 'min 0 sibling-y-orders) 1))
+                  (setq cur-y (+ 1 (apply 'max 0 sibling-y-orders)))))
+               ((member rel '("to the left of" "to the right of"))
+                (setq row-siblings (seq-filter
+                                    (lambda (sibling)
+                                      (with-slots (y-order) sibling
+                                        (= prev-y y-order)))
+                                    (append (org-real--get-all siblings)
+                                            (org-real--get-all hidden-siblings))))
+                (setq cur-level prev-level)
+                (setq cur-y prev-y)
+                (setq cur-behind prev-behind)
+                (setq cur-on-top prev-on-top)
+                (setq cur-in-front prev-in-front)
+                (if (string= rel "to the left of")
+                    (setq cur-x prev-x)
+                  (setq cur-x (+ 1 prev-x)))
+                (mapc
+                 (lambda (sibling)
+                   (with-slots (x-order) sibling
+                     (if (>= x-order cur-x)
+                         (setq x-order (+ 1 x-order)))))
+                 row-siblings)))
+              (oset box :rel-box prev)
+              (oset box :rel rel)
               (if (not (slot-boundp box :name)) (setq cur-level 0))
               (let ((visible (or (= 0 org-real--visibility) (<= cur-level org-real--visibility))))
                 (if (and prev (member rel '("in" "on" "behind" "in front of" "on top of")))
@@ -1379,7 +1385,7 @@ characters if possible."
      (lambda (child) (org-real--apply-level child (+ 1 level)))
      (append (org-real--get-all children)
              (org-real--get-all hidden-children)))))
-    
+
 (cl-defmethod org-real--add-headline (headline
                                       (parent org-real-box))
   "Add HEADLINE to world as a child of PARENT."
@@ -1559,7 +1565,7 @@ set to the :loc slot of each box."
         (org-real--add-headline headline world))
      headlines)
     world))
-    
+
 
 (defun org-real--to-link (containers)
   "Create a link string from CONTAINERS."

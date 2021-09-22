@@ -2,7 +2,7 @@
 
 * Opening links
 
-** FAIL [[real://1-2/1-1?rel=on top of/1-0?rel=above][Is above an on top]]
+** PASS [[real://1-2/1-1?rel=on top of/1-0?rel=above][Is above an on top]]
    #+begin_example
 
   The 1-0 is above the 1-1 on top of the 1-2.
@@ -28,35 +28,34 @@
                      
    #+end_example
 
-** FAIL [[real://6-4/6-3?rel=on top of/6-2?rel=on top of/6-1?rel=above][Is above an on top of an on top]]
+** PASS [[real://6-4/6-3?rel=on top of/6-2?rel=on top of/6-1?rel=above][Is above an on top of an on top]]
    #+begin_example
 
   The 6-1 is above the 6-2 on top of the 6-3 on top of the 6-4.
-                                
-       ┌───────┐                
-       │       │                
-       │  6-1  │                
-       │       │                
-       └───────┘                
-                                
-             ┌───────┐          
-             │       │          
-             │  6-2  │          
-             │       │          
-          ┌──┴───────┴──┐       
-          │             │       
-          │  6-3        │       
-          │             │       
-       ┌──┴─────────────┴──┐    
-       │                   │    
-       │  6-4              │    
-       │                   │    
-       └───────────────────┘    
-                                
-                                
-                                
-                                
-                                
+                           
+   ┌───────┐               
+   │       │               
+   │  6-1  │               
+   │       │               
+   └───────┘               
+                           
+         ┌───────┐         
+         │       │         
+         │  6-2  │         
+         │       │         
+      ┌──┴───────┴──┐      
+      │             │      
+      │  6-3        │      
+      │             │      
+   ┌──┴─────────────┴──┐   
+   │                   │   
+   │  6-4              │   
+   │                   │   
+   └───────────────────┘   
+                           
+                           
+                           
+                           
    #+end_example
 
 ** PASS [[real://7-3/7-2?rel=on top of/7-1?rel=below][Is below an on top]]
@@ -84,9 +83,33 @@
                      
    #+end_example
 
-** FAIL [[real://2-4/2-3?rel=on top of/2-2?rel=on top of/2-1?rel=below][Is below an on top of an on top]]
+** PASS [[real://2-4/2-3?rel=on top of/2-2?rel=on top of/2-1?rel=below][Is below an on top of an on top]]
    #+begin_example
-     Not created yet
+
+  The 2-1 is below the 2-2 on top of the 2-3 on top of the 2-4.
+                           
+         ┌───────┐         
+         │       │         
+         │  2-2  │         
+         │       │         
+      ┌──┴───────┴──┐      
+      │             │      
+      │  2-3        │      
+      │             │      
+      │  ┌───────┐  │      
+      │  │       │  │      
+      │  │  2-1  │  │      
+      │  │       │  │      
+      │  └───────┘  │      
+   ┌──┴─────────────┴──┐   
+   │                   │   
+   │  2-4              │   
+   │                   │   
+   └───────────────────┘   
+                           
+                           
+                           
+                           
    #+end_example
 
 ** PASS [[real://3-3?rel=in/3-2?rel=in front of/3-1?rel=above][Is above an in front]]
@@ -145,7 +168,7 @@
                            
    #+end_example
 
-** FAIL [[real://4-3/4-2?rel=in front of/4-1?rel=below][Is below an in front]]
+** PASS [[real://4-3/4-2?rel=in front of/4-1?rel=below][Is below an in front]]
    #+begin_example
 
   The 4-1 is below the 4-2 in front of the 4-3.
@@ -171,7 +194,7 @@
                      
    #+end_example
 
-** FAIL [[real://8-4/8-3?rel=in front of/8-2?rel=in front of/8-1?rel=below][Is below an in front of an in front]]
+** PASS [[real://8-4/8-3?rel=in front of/8-2?rel=in front of/8-1?rel=below][Is below an in front of an in front]]
    #+begin_example
 
   The 8-1 is below the 8-2 in front of the 8-3 in front of the 8-4.
@@ -195,7 +218,6 @@
    │  8-1  │               
    │       │               
    └───────┘               
-                           
                            
                            
                            
