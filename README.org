@@ -2,22 +2,59 @@
 
 Keep track of real things as org-mode links.
 
-#+begin_src emacs-lisp
-  (use-package org-real
-    :straight (org-real :type git :host gitlab :repo "tygrdev/org-real"))
-#+end_src
-
-*OR*
-
-[[https://gitlab.com/tygrdev/org-real/-/releases][Download the latest release]]
-
-and
-
-=M-x package-install-file org-real-x.y.z.el=
-
-=M-x load-library RET org-real=
 
 * Status *BETA*
+* Installation
+
+** Using [[https://github.com/raxod502/straight.el#getting-started][straight.el]] (defaults shown)
+#+begin_src emacs-lisp
+  (use-package org-real
+    :straight (org-real :type git :host gitlab :repo "tygrdev/org-real")
+    :init
+    (setq org-real-default-visibility 2
+          org-real-flex-width 80
+          org-real-include-context t
+          org-real-margin-x 2
+          org-real-margin-y 1
+          org-real-padding-x 2
+          org-real-padding-y 1))
+#+end_src
+
+** Manual installation
+   First, [[https://gitlab.com/tygrdev/org-real/-/releases][download the latest release]] (=org-real-x.y.z.el=)
+
+*** Try it out
+    You can try it out in the current emacs session with:
+
+    =M-x load-file RET org-real-x.y.z.el=
+*** Permanent installation
+    Or you can install it permanently by running:
+
+    =M-x package-install-file RET org-real-x.y.z.el=
+
+    and adding the following to your init file.
+
+    Bare bones:
+    #+begin_src emacs-lisp
+      (require 'org-real)
+    #+end_src
+
+    Or, for use-package (defaults shown)
+   #+begin_src emacs-lisp
+     (use-package org-real
+       :init
+       (setq org-real-default-visibility 2
+             org-real-flex-width 80
+             org-real-include-context t
+             org-real-margin-x 2
+             org-real-margin-y 1
+             org-real-padding-x 2
+             org-real-padding-y 1))
+   #+end_src
+*** Manual upgrade
+    Download the latest release and run:
+    =M-x package-install-file RET org-real-x.y.z.el=
+
 * Usage
 ** Inserting a link
    To create a real link in org-mode, use =C-c C-l real RET=.
@@ -96,12 +133,9 @@ and
    In the org real diagram, emacs movement keys will navigate by boxes
    rather than characters. Each box in the diagram has these options:
 
-   - RET / mouse-1
-     Jump to first occurrence of link
-   - o
-     Cycle occurrences of links in other window
-   - M-RET
-     Open all occurences of links by splitting the current window
+   - =RET / mouse-1= Jump to first occurrence of link
+   - =o= Cycle occurrences of links in other window
+   - =M-RET= Open all occurences of links by splitting the current window
 
    [[file:demo/org-real-mode.gif]]
 
@@ -126,3 +160,22 @@ and
    - to the left of
 
    [[file:demo/headline-relationships.png]]
+
+
+* Development
+
+** Setup
+
+   Install [[https://github.com/doublep/eldev#installation][eldev]]
+
+** Commands:
+*** =eldev lint=
+    Lint the =org-real.el= file
+*** =eldev compile=
+    Test whether ELC has any complaints
+*** =eldev test=
+    Run all test files in =tests/=
+*** =eldev package=
+    Creates a dist folder with =org-real-<version>.el=
+*** =eldev md5=
+    Creates an md5 checksum against all files in the dist folder.
