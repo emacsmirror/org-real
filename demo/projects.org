@@ -1,0 +1,18 @@
+#+TITLE: Projects
+
+* Ideas
+** Keyboard pants
+   :PROPERTIES:
+   :REL: on top of
+   :END:
+** Org real
+* Personal
+** Banking
+** Healthcare
+* Work
+** Configure emacs
+** Install adobe illustrator
+   :PROPERTIES:
+   :REL: in front of
+   :END:
+
