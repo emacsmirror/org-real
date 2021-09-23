@@ -1441,7 +1441,7 @@ characters if possible."
                             (org-real--make-dirty world)
                             (oset box :y-order last-sibling-y)
                             (oset box :x-order (+ 1 last-sibling-x))))))))))))))
-    (mapc 'org-real--flex-adjust (org-real--get-all children))))
+    (mapc 'org-real--flex-adjust-helper (org-real--get-all children))))
 
 (cl-defmethod org-real--apply-level ((box org-real-box) level)
   "Apply LEVEL to BOX and update all of its children."
