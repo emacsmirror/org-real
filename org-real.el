@@ -479,7 +479,7 @@ visibility."
                        (org-real--complete-thing "Thing: " container-matrix '()))))
     (catch 'confirm
       (while t
-        (org-real--pp (org-real--make-instance 'org-real-box containers) containers)
+        (org-real--pp (org-real--make-instance 'org-real-box containers) containers nil nil 0)
         (let ((response (read-event "RETURN    - Confirm\nBACKSPACE - Remove context\n+         - Add context")))
           (cond
            ((or (eq response 'return) (eq response 13))
