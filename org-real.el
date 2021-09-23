@@ -1531,48 +1531,49 @@ characters if possible."
 
 ;;;; Org real mode buttons
 
-(defun org-real--jump-other-window (markers)
-  "Jump to location of link in other window.
-
-MARKERS is a list of locations of each button in the buffer."
-  (let ((i 0))
+(defun org-real--jump-other-window (box)
+  "Jump to location of link for BOX in other window."
+  (with-slots (locations) box
     (lambda ()
       (interactive)
-      (let* ((marker (nth i markers))
+      (let ((first (car locations)))
+        (object-remove-from-list box :locations first)
+        (object-add-to-list box :locations first t))
+      (let* ((marker (car locations))
              (buffer (marker-buffer marker))
              (pos (marker-position marker)))
         (save-selected-window
           (switch-to-buffer-other-window buffer)
-          (goto-char pos))
-        (setq i (mod (+ 1 i) (length markers)))))))
+          (goto-char pos))))))
 
-(defun org-real--jump-to (marker)
-  "Jump to the first occurrence of a link in the same window.
-
-MARKER is the position of the first occurrence of the link."
-  (let ((buffer (marker-buffer marker)))
+(defun org-real--jump-to (box)
+  "Jump to the first occurrence of a link for BOX in the same window."
+  (with-slots (locations) box
     (lambda ()
       (interactive)
-      (if-let ((window (get-buffer-window buffer)))
-          (select-window window)
-        (switch-to-buffer buffer))
-      (goto-char (marker-position marker)))))
+      (let* ((marker (car locations))
+             (buffer (marker-buffer marker))
+             (pos (marker-position marker)))
+        (if-let ((window (get-buffer-window buffer)))
+            (select-window window)
+          (switch-to-buffer buffer))
+        (goto-char pos)))))
 
-(defun org-real--jump-all (markers)
-  "View all occurrences of a link in the same window.
-
-MARKERS is the list of positions of the link."
-  (lambda ()
-    (interactive)
-    (let ((size (/ (window-height) (length markers))))
-      (or (<= window-min-height size)
-          (error "To many buffers to visit simultaneously"))
-      (switch-to-buffer (marker-buffer (car markers)))
-      (goto-char (marker-position (car markers)))
-      (dolist (marker (cdr markers))
-        (select-window (split-window nil size))
+(defun org-real--jump-all (box)
+  "View all occurrences of links from BOX in the same window."
+  (with-slots (locations) box
+    (lambda ()
+      (interactive)
+      (let* ((size (/ (window-height) (length locations)))
+             (marker (car locations)))
+        (or (<= window-min-height size)
+            (error "To many buffers to visit simultaneously"))
         (switch-to-buffer (marker-buffer marker))
-        (goto-char (marker-position marker))))))
+        (goto-char (marker-position marker))
+        (dolist (marker (cdr locations))
+          (select-window (split-window nil size))
+          (switch-to-buffer (marker-buffer marker))
+          (goto-char (marker-position marker)))))))
 
 (cl-defmethod org-real--create-button-keymap ((box org-real-box))
   "Create a keymap for a button in Org Real mode.
@@ -1583,10 +1584,10 @@ BOX is the box the button is being made for."
      (mapcar
       (lambda (key) (cons (kbd (car key)) (cdr key)))
       `(("TAB"       . ,(org-real--cycle-children box))
-        ("o"         . ,(org-real--jump-other-window locations))
-        ("<mouse-1>" . ,(org-real--jump-to (car locations)))
-        ("RET"       . ,(org-real--jump-to (car locations)))
-        ("M-RET"     . ,(org-real--jump-all locations)))))))
+        ("o"         . ,(org-real--jump-other-window box))
+        ("<mouse-1>" . ,(org-real--jump-to box))
+        ("RET"       . ,(org-real--jump-to box))
+        ("M-RET"     . ,(org-real--jump-all box)))))))
 
 ;;;; Utility expressions
 
