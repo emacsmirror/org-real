@@ -193,22 +193,28 @@
    #+end_example
 * Merging links
 
-** PASS Merges two boxes
+** PASS Merges a box on top of a box
    #+begin_src org
-     - [[real://thing3/thing2?rel=on top of/thing1?rel=to the right of]]
-     - [[real://thing3/thing2?rel=on top of]]
+     - [[real://thing2/thing1?rel=on top of]]
+     - [[real://thing2/thing1?rel=on top of/above?rel=above]]
    #+end_src
    #+begin_example
 
-      ┌──────────┐  ┌──────────┐
-      │          │  │          │
-      │  thing2  │  │  thing1  │
-      │          │  │          │
-   ┌──┴──────────┴──┴──────────┴──┐
-   │                              │
-   │  thing3                      │
-   │                              │
-   └──────────────────────────────┘
+   ┌─────────┐
+   │         │
+   │  above  │
+   │         │
+   └─────────┘
+
+      ┌──────────┐
+      │          │
+      │  thing1  │
+      │          │
+   ┌──┴──────────┴──┐
+   │                │
+   │  thing2        │
+   │                │
+   └────────────────┘
    #+end_example
 
    
