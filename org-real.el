@@ -38,6 +38,9 @@
 ;;             Pressed multiple times, cycle through occurrences.
 ;;   M-RET - Open all occurrences as separate buffers.
 ;;             This will split the current window as needed.
+;;   r     - Jump to the box directly related to the current box.
+;;             Repeated presses will eventually take you to the
+;;             top level box.
 ;;
 
 ;;; Code:
@@ -134,6 +137,10 @@
 
 ;;;; Faces
 
+(defface org-real-default nil
+  "Default face used in Org Real mode."
+  :group 'org-real)
+
 (defface org-real-primary nil
   "Face for the last thing in a real link."
   :group 'org-real)
@@ -141,6 +148,24 @@
 (face-spec-set
  'org-real-primary
  '((t :foreground "light slate blue"))
+ 'face-defface-spec)
+
+(defface org-real-selected nil
+  "Face for the current box under cursor."
+  :group 'org-real)
+
+(face-spec-set
+ 'org-real-selected
+ '((t :foreground "light slate blue"))
+ 'face-defface-spec)
+
+(defface org-real-rel nil
+  "Face for the box which is related to the box under the cursor."
+  :group 'org-real)
+
+(face-spec-set
+ 'org-real-rel
+ '((t :foreground "orange"))
  'face-defface-spec)
 
 ;;;; Constants & variables
@@ -377,8 +402,10 @@ The following commands are available:
 
 \\{org-real-mode-map}"
   :group 'org-mode
-  (setq indent-tabs-mode nil)
-  (let ((inhibit-message t)) (toggle-truncate-lines t)))
+  (let ((inhibit-message t))
+    (setq indent-tabs-mode nil)
+    (cursor-sensor-mode t)
+    (toggle-truncate-lines t)))
 
 (mapc
  (lambda (key) (define-key org-real-mode-map (kbd (car key)) (cdr key)))
@@ -733,10 +760,16 @@ non-nil, skip setting :primary slot on the last box."
 
 ;;;; Drawing
 
-(cl-defmethod org-real--draw ((box org-real-box))
+(cl-defmethod org-real--draw ((box org-real-box) &optional arg)
   "Insert an ascii drawing of BOX into the current buffer.
 
-OFFSET is the starting line to start insertion.
+If ARG is non-nil, skip drawing children boxes and only update
+text properties on the border. If ARG is 'selected, draw the
+border using the `org-real-selected' face. If ARG is 'rel, draw
+the border using `org-real-rel' face, else use `org-real-default'
+face.
+
+Uses `org-real--current-offset' to determine row offset.
 
 Adds to list `org-real--box-ring' the buffer position of each
 button drawn."
@@ -764,29 +797,44 @@ button drawn."
                            (when (< (line-number-at-pos) (car coords))
                              (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
                            (move-to-column (cdr coords) t)
-                           (if primary (put-text-property 0 (length str)
-                                                          'face 'org-real-primary str))
-                           (insert str)
-                           (let ((remaining-chars (- (save-excursion (end-of-line) (current-column))
-                                                     (current-column))))
-                             (delete-char (min (length str) remaining-chars))))
+                           (if arg
+                               (ignore-errors
+                                 (put-text-property (point) (+ (length str) (point))
+                                                    'face (cond ((eq arg 'selected) 'org-real-selected)
+                                                                ((eq arg 'rel) 'org-real-rel)
+                                                                (t 'org-real-default))))
+                             (put-text-property 0 (length str)
+                                                'face (if primary
+                                                          'org-real-primary
+                                                        'org-real-default)
+                                                str)
+                             (insert str)
+                             (let ((remaining-chars (- (save-excursion (end-of-line) (current-column))
+                                                       (current-column))))
+                               (delete-char (min (length str) remaining-chars)))))
                      (draw-name (coords str &optional primary)
-                                (if (not locations)
-                                    (draw coords str primary)
-                                  (forward-line (- (car coords) (line-number-at-pos)))
-                                  (when (< (line-number-at-pos) (car coords))
-                                    (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
-                                  (move-to-column (cdr coords) t)
-                                  (setq box-coords coords)
-                                  (if primary (put-text-property 0 (length str)
-                                                                 'face 'org-real-primary str))
-                                  (insert-button str
-                                                 'help-echo "Jump to first occurence"
-                                                 'keymap (org-real--create-button-keymap box))
-                                  (let ((remaining-chars (- (save-excursion (end-of-line)
-                                                                            (current-column))
+                                (when (not arg)
+                                  (if (not locations)
+                                      (draw coords str primary)
+                                    (forward-line (- (car coords) (line-number-at-pos)))
+                                    (when (< (line-number-at-pos) (car coords))
+                                      (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
+                                    (move-to-column (cdr coords) t)
+                                    (setq box-coords coords)
+                                    (if primary (put-text-property 0 (length str)
+                                                                   'face 'org-real-primary
+                                                                   str))
+                                    (put-text-property 0 (length str)
+                                                       'cursor-sensor-functions
+                                                       (list (org-real--create-cursor-functions box))
+                                                       str)
+                                    (insert-button str
+                                                   'help-echo "Jump to first occurence"
+                                                   'keymap (org-real--create-button-keymap box))
+                                    (let ((remaining-chars (- (save-excursion (end-of-line)
+                                                                              (current-column))
                                                             (current-column))))
-                                    (delete-char (min (length str) remaining-chars))))))
+                                      (delete-char (min (length str) remaining-chars)))))))
             (draw (cons top left)
                   (concat (if double "╔" "┌")
                           (make-string (- width 2) (cond (dashed #x254c)
@@ -820,11 +868,13 @@ button drawn."
                                         (double "║")
                                         (t "│")))
                 (setq r (+ r 1))))))))
-    (apply 'append
-           (if box-coords (list box-coords) nil)
-           (mapcar
-            'org-real--draw
-            (org-real--get-children box)))))
+    (if arg
+        (if box-coords (list box-coords) nil)
+      (apply 'append
+             (if box-coords (list box-coords) nil)
+             (mapcar
+              'org-real--draw
+              (org-real--get-children box))))))
 
 (cl-defmethod org-real--get-width ((box org-real-box))
   "Get the width of BOX."
@@ -1014,6 +1064,22 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 
 ;;;; Org real mode buttons
 
+(cl-defmethod org-real--create-cursor-functions ((box org-real-box))
+  (with-slots (rel-box) box
+    (lambda (_window _oldpos dir)
+      (let ((inhibit-read-only t)
+            (top (org-real--get-top box))
+            (left (org-real--get-left box)))
+        (save-excursion
+          (if (eq dir 'entered)
+              (progn
+                (if (slot-boundp box :rel-box)
+                    (org-real--draw rel-box 'rel))
+                (org-real--draw box 'selected))
+            (if (slot-boundp box :rel-box)
+                (org-real--draw rel-box t))
+            (org-real--draw box t)))))))
+
 (cl-defmethod org-real--jump-other-window ((box org-real-box))
   "Jump to location of link for BOX in other window."
   (with-slots (locations) box
@@ -1058,6 +1124,18 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
           (switch-to-buffer (marker-buffer marker))
           (goto-char (marker-position marker)))))))
 
+(cl-defmethod org-real--jump-rel ((box org-real-box))
+  (with-slots (rel-box) box
+    (if (not (slot-boundp box :rel-box))
+        'identity
+      (let ((left (org-real--get-left rel-box))
+            (top (org-real--get-top rel-box)))
+        (lambda ()
+          (interactive)
+          (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
+                           (line-number-at-pos)))
+          (move-to-column (+ left 1 org-real-padding-x)))))))
+
 (cl-defmethod org-real--create-button-keymap ((box org-real-box))
   "Create a keymap for a button in Org Real mode.
 
@@ -1068,6 +1146,7 @@ BOX is the box the button is being made for."
       (lambda (key) (cons (kbd (car key)) (cdr key)))
       `(("TAB"       . ,(org-real--cycle-children box))
         ("o"         . ,(org-real--jump-other-window box))
+        ("r"         . ,(org-real--jump-rel box))
         ("<mouse-1>" . ,(org-real--jump-to box))
         ("RET"       . ,(org-real--jump-to box))
         ("M-RET"     . ,(org-real--jump-all box)))))))

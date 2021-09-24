@@ -140,6 +140,7 @@ Keep track of real things as org-mode links.
    - =RET / mouse-1= Jump to first occurrence of link
    - =o= Cycle occurrences of links in other window
    - =M-RET= Open all occurences of links by splitting the current window
+   - =r= Jump to the box directly related to the current box
 
    [[file:demo/org-real-mode.gif]]
 
