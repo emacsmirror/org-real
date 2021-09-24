@@ -3,7 +3,7 @@
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
 ;; Version: 0.4.0
 ;; File: org-real.el
-;; Package-Requires: ((emacs "26.1"))
+;; Package-Requires: ((emacs "26.1") (popup "0.5"))
 ;; Keywords: tools
 ;; URL: https://gitlab.com/tygrdev/org-real
 
@@ -49,7 +49,9 @@
 
 (require 'eieio)
 (require 'org-element)
+(require 'org-colview)
 (require 'cl-lib)
+(require 'popup)
 
 ;;;; Patch! 0.0.1 -> 0.1.0+
 ;;;; Will be removed in version 1.0.0+
@@ -166,6 +168,16 @@
 (face-spec-set
  'org-real-rel
  '((t :foreground "orange"))
+ 'face-defface-spec)
+
+(defface org-real-popup nil
+  "Face for popups in an Org Real diagram."
+  :group 'org-real)
+
+(face-spec-set
+ 'org-real-popup
+ '((t :background "light slate blue"
+      :foreground "white"))
  'face-defface-spec)
 
 ;;;; Constants & variables
@@ -403,6 +415,9 @@ The following commands are available:
 \\{org-real-mode-map}"
   :group 'org-mode
   (let ((inhibit-message t))
+    (face-remap-add-relative
+     'popup-tip-face
+     'org-real-popup)
     (setq indent-tabs-mode nil)
     (cursor-sensor-mode t)
     (toggle-truncate-lines t)))
@@ -503,9 +518,10 @@ visibility."
          (box (org-real--make-instance 'org-real-box (copy-tree containers))))
     (if org-real-include-context
         (let* ((primary-name (plist-get (car (reverse containers)) :name))
-               (children (mapcar
-                          (lambda (containers)
-                            (org-real--make-instance 'org-real-box containers t))
+               (context (mapcar
+                         (lambda (containers)
+                           (org-real--make-instance 'org-real-box containers t))
+                         (cl-delete-duplicates
                           (seq-filter
                            (lambda (containers)
                              (let ((rel-containers (reverse containers)))
@@ -514,8 +530,12 @@ visibility."
                                 (lambda (rel-container)
                                   (string= primary-name (plist-get rel-container :name)))
                                 rel-containers)))
-                           (org-real--parse-buffer)))))
-          (setq box (org-real--merge (push box children)))))
+                           (org-real--parse-buffer))
+                          :test #'string=
+                          :key (lambda (containers) (plist-get (nth (- (length containers) 1)
+                                                                    containers)
+                                                               :name))))))
+          (setq box (org-real--merge (push box context)))))
     (org-real--pp box (copy-tree containers) nil nil 0)))
 
 (defun org-real-complete (&optional existing)
@@ -765,8 +785,8 @@ non-nil, skip setting :primary slot on the last box."
   "Insert an ascii drawing of BOX into the current buffer.
 
 If ARG is non-nil, skip drawing children boxes and only update
-text properties on the border. If ARG is 'selected, draw the
-border using the `org-real-selected' face. If ARG is 'rel, draw
+text properties on the border.  If ARG is 'selected, draw the
+border using the `org-real-selected' face.  If ARG is 'rel, draw
 the border using `org-real-rel' face, else use `org-real-default'
 face.
 
@@ -1065,28 +1085,31 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 
 ;;;; Org real mode buttons
 
-(cl-defmethod org-real--create-cursor-functions ((box org-real-box))
+(cl-defmethod org-real--create-cursor-function ((box org-real-box))
+  "Create cursor functions for entering and leaving BOX."
   (with-slots (rel rel-box name metadata) box
-    (lambda (_window _oldpos dir)
-      (let ((inhibit-read-only t)
-            (top (org-real--get-top box))
-            (left (org-real--get-left box)))
-        (save-excursion
-          (if (eq dir 'entered)
-              (progn
-                (if (slot-boundp box :metadata)
-                    (message metadata)
-                  (if (slot-boundp box :name)
-                      (if (slot-boundp box :rel)
-                          (with-slots ((rel-name name)) rel-box
-                            (message "The %s is %s the %s." name rel rel-name))
-                        (message "The %s." name)))) 
-                (if (slot-boundp box :rel-box)
-                    (org-real--draw rel-box 'rel))
-                (org-real--draw box 'selected))
-            (if (slot-boundp box :rel-box)
-                (org-real--draw rel-box t))
-            (org-real--draw box t)))))))
+    (let (timer)
+      (lambda (_window _oldpos dir)
+        (let ((inhibit-read-only t))
+          (save-excursion
+            (if (eq dir 'entered)
+                (progn
+                  (setq timer
+                        (run-with-idle-timer
+                         0.3 nil
+                         (lambda ()
+                           (if (slot-boundp box :metadata)
+                               (org-real--popup metadata)
+                             (if (and (slot-boundp box :name) (slot-boundp box :rel))
+                                 (with-slots ((rel-name name)) rel-box
+                                   (org-real--popup (format "The %s is %s the %s." name rel rel-name))))))))
+                  (if (slot-boundp box :rel-box)
+                      (org-real--draw rel-box 'rel))
+                  (org-real--draw box 'selected))
+              (if timer (cancel-timer timer))
+              (if (slot-boundp box :rel-box)
+                  (org-real--draw rel-box t))
+              (org-real--draw box t))))))))
 
 (cl-defmethod org-real--jump-other-window ((box org-real-box))
   "Jump to location of link for BOX in other window."
@@ -1133,6 +1156,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
           (goto-char (marker-position marker)))))))
 
 (cl-defmethod org-real--jump-rel ((box org-real-box))
+  "Jump to the box directly related to BOX."
   (with-slots (rel-box) box
     (if (not (slot-boundp box :rel-box))
         'identity
@@ -1636,7 +1660,7 @@ characters if possible."
              (children (alist-get 'children partitioned))
              (siblings (alist-get 'siblings partitioned))
              (pos (goto-char (org-element-property :begin headline)))
-             (columns (org-columns--collect-values org-columns-current-fmt))
+             (columns (org-columns--collect-values))
              (max-column-length (apply 'max 0
                                        (mapcar
                                         (lambda (column)
@@ -1714,6 +1738,12 @@ characters if possible."
       (move-to-column (+ left 1 org-real-padding-x)))))
 
 ;;;; Utility expressions
+
+(defun org-real--popup (str)
+  "Show a popup tooltip with STR contents."
+  (popup-tip str
+             :parent-offset 1
+             :margin org-real-padding-x))
 
 (defun org-real--find-last-index (pred sequence)
   "Return the index of the last element for which (PRED element) is non-nil in SEQUENCE."
@@ -1796,7 +1826,7 @@ set to the :loc slot of each box."
                     "Document"))
          (world (org-real-box))
          (document (org-real-box :name title
-                                 :metadata title
+                                 :metadata ""
                                  :locations (list (point-min-marker)))))
     (org-real--flex-add document world)
     (mapc
