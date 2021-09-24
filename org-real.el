@@ -1658,12 +1658,13 @@ set to the :loc slot of each box."
          (containers (mapcar
                       (lambda (token)
                         (let* ((location (split-string token "\\?"))
-                               (container (list :name (car location) :loc marker))
-                               (rel (and (string-match "&?rel=\\([^&]*\\)" (cadr location))
-                                         (match-string 1 (cadr location)))))
-                          (if rel
-                              (plist-put container :rel rel)
-                            container)))
+                               (rel (or (and (cadr location)
+                                             (string-match "&?rel=\\([^&]*\\)" (cadr location))
+                                             (match-string 1 (cadr location)))
+                                        "in")))
+                          (list :name (car location)
+                                :loc marker
+                                :rel rel)))
                       tokens)))
     (push (list :name host :loc marker) containers)))
 
@@ -1704,8 +1705,9 @@ set to the :loc slot of each box."
           (mapconcat
            (lambda (container)
              (concat (plist-get container :name)
-                     (when (plist-member container :rel)
-                       (concat "?rel=" (plist-get container :rel)))))
+                     (when-let ((rel (plist-get container :rel)))
+                       (if (not (string= "in" rel))
+                           (concat "?rel=" (plist-get container :rel))))))
            containers
            "/")))
 
