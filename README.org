@@ -148,10 +148,20 @@ Keep track of real things as org-mode links.
    To view all real links in the current buffer in a combined diagram,
    use the interactive function =org-real-world=
 
+   Suggested keybinding:
+   #+begin_src emacs-lisp
+     (define-key org-mode-map (kbd "C-c r w") 'org-real-world)
+   #+end_src
+
 ** =org-real-headlines=
 
    To view all headlines in an org-mode file as an org-real diagram,
    use the interactive function =org-real-headlines=
+
+   Suggested keybinding:
+   #+begin_src emacs-lisp
+     (define-key org-mode-map (kbd "C-c r o") 'org-real-headlines)
+   #+end_src
 
    To modify the relationship between a headline and its parent, add
    the property REL to the child headline. Valid values are:

@@ -14,4 +14,4 @@
   - [[real://garage/east wall?rel=in/rake?rel=on/hoe?rel=to the left of/snowblower?rel=above][snowblower]]
   - [[real://garage/workbench?rel=in/hammer?rel=on/screws?rel=to the right of][screws]]
   - [[real://garage/saw?rel=on][saw]]
-  - [[real://garage/workbench?rel=in/hammer?rel=on/screws?rel=to the right of/pliers?rel=above][pliers]]
+  - [[real://garage/workbench?rel=in/paintbrush?rel=in front of/wrench?rel=to the left of/pliers?rel=below][pliers]]
