@@ -699,13 +699,17 @@ non-nil, skip setting :primary slot on the last box."
             (slot-makeunbound box :expand-children))
           (if (org-real--get-all hidden-children)
               (cl-rotatef children hidden-children))
-          (mapc
-           (lambda (child)
-             (with-slots (expand-siblings) child
-               (when (slot-boundp child :expand-siblings)
-                 (funcall expand-siblings child)
-                 (slot-makeunbound child :expand-siblings))))
-           (org-real--get-all children)))
+          (let (fully-expanded)
+            (while (not fully-expanded)
+              (setq fully-expanded t)
+              (mapc
+               (lambda (child)
+                 (with-slots (expand-siblings) child
+                   (when (slot-boundp child :expand-siblings)
+                     (funcall expand-siblings child)
+                     (slot-makeunbound child :expand-siblings)
+                     (setq fully-expanded nil))))
+               (org-real--get-all children)))))
       (if (not (org-real--get-all hidden-children)) (cl-rotatef children hidden-children)))
     (mapc 'org-real--update-visibility (append (org-real--get-all children)
                                                (org-real--get-all hidden-children)))))
