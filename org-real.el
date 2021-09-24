@@ -634,6 +634,14 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
          :type string)
    (rel :initarg :rel
         :type string)
+   (primary :initarg :primary
+            :initform nil
+            :type boolean)
+   (locations :initarg :locations
+              :initform '()
+              :type list)
+   (metadata :initarg :metadata
+             :type string)
    (rel-box :initarg :rel-box
             :type org-real-box)
    (x-order :initarg :x-order
@@ -677,15 +685,8 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
            :type number)
    (flex :initarg :flex
          :initform nil
-         :type boolean)
-   (primary :initarg :primary
-            :initform nil
-            :type boolean)
-   (locations :initarg :locations
-              :initform '()
-              :type list))
+         :type boolean))
   "A representation of a box in 3D space.")
-
 
 (cl-defmethod org-real--get-all ((collection org-real-box-collection))
   "Get all boxes in COLLECTION as a sequence."
@@ -1065,7 +1066,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 ;;;; Org real mode buttons
 
 (cl-defmethod org-real--create-cursor-functions ((box org-real-box))
-  (with-slots (rel-box) box
+  (with-slots (rel rel-box name metadata) box
     (lambda (_window _oldpos dir)
       (let ((inhibit-read-only t)
             (top (org-real--get-top box))
@@ -1073,6 +1074,13 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
         (save-excursion
           (if (eq dir 'entered)
               (progn
+                (if (slot-boundp box :metadata)
+                    (message metadata)
+                  (if (slot-boundp box :name)
+                      (if (slot-boundp box :rel)
+                          (with-slots ((rel-name name)) rel-box
+                            (message "The %s is %s the %s." name rel rel-name))
+                        (message "The %s." name)))) 
                 (if (slot-boundp box :rel-box)
                     (org-real--draw rel-box 'rel))
                 (org-real--draw box 'selected))
@@ -1617,23 +1625,41 @@ characters if possible."
     (with-current-buffer (marker-buffer (car locations))
       (let* ((partitioned (seq-group-by
                            (lambda (h)
-                             (let ((child-rel (or (org-entry-get (org-element-property :begin h) "REL") "in")))
+                             (let ((child-rel (or (org-entry-get
+                                                   (org-element-property :begin h)
+                                                   "REL")
+                                                  "in")))
                                (if (member child-rel org-real-children-prepositions)
                                    'children
                                  'siblings)))
                            (cddr headline)))
              (children (alist-get 'children partitioned))
              (siblings (alist-get 'siblings partitioned))
-             (pos (org-element-property :begin headline))
-             (rel (or (org-entry-get pos "REL") "in"))
+             (pos (goto-char (org-element-property :begin headline)))
+             (columns (org-columns--collect-values org-columns-current-fmt))
+             (max-column-length (apply 'max 0
+                                       (mapcar
+                                        (lambda (column)
+                                          (length (cadr (car column))))
+                                        columns)))
+             (rel (or (org-entry-get nil "REL") "in"))
              (level (if (member rel org-real-children-prepositions)
                         (+ 1 parent-level)
                       parent-level))
-             (box (org-real-box :name (org-element-property :title headline)
+             (name (org-element-property :title headline))
+             (box (org-real-box :name name
                                 :rel rel
                                 :level level
                                 :rel-box parent
                                 :parent parent
+                                :metadata (mapconcat
+                                           (lambda (column)
+                                             (format
+                                              (concat "%-" (number-to-string max-column-length) "s : %s")
+                                              (cadr (car column))
+                                              (cadr column)))
+                                           columns
+                                           "\n")
                                 :locations (list (set-marker (point-marker) pos))
                                 :in-front (string= rel "in front of")
                                 :on-top (string= rel "on top of")
@@ -1763,12 +1789,14 @@ set to the :loc slot of each box."
 
 (defun org-real--parse-headlines ()
   "Create an org real box from the current buffer's headlines."
+  (org-columns-get-format)
   (let* ((headlines (cddr (org-element-parse-buffer 'headline)))
          (filename (buffer-file-name))
          (title (or (concat (file-name-base filename) "." (file-name-extension filename))
                     "Document"))
          (world (org-real-box))
          (document (org-real-box :name title
+                                 :metadata title
                                  :locations (list (point-min-marker)))))
     (org-real--flex-add document world)
     (mapc
