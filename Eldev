@@ -1,8 +1,5 @@
 ; -*- mode: emacs-lisp; lexical-binding: t -*-
 
-(eldev-use-package-archive 'melpa)
-(eldev-add-extra-dependencies 'test 'popup)
-
 (eldev-defcommand
  org_real-md5 (&rest _)
  "Create md5 checksum of .tar and .el files in dist folder."
@@ -22,7 +19,6 @@
  :override t
  (require 'cl-lib)
  (require 'org-element)
- (eldev-load-project-dependencies)
  (load-file "org-real.el")
  (let ((failures 0))
    (cl-flet* ((get-expected ()
