@@ -181,6 +181,8 @@ Keep track of real things as org-mode links.
    [[file:demo/headline-relationships.png]]
 
 
+   The tooltip for each headline shows the values that would be
+   displayed if the org file was in org columns view.
 * Development
 
 ** Setup
