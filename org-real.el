@@ -137,6 +137,16 @@
   :type 'number
   :group 'org-real)
 
+(defcustom org-real-tooltips t
+  "Show tooltips in an org real diagram."
+  :type 'boolean
+  :group 'org-real)
+
+(defcustom org-real-tooltip-timeout 0.5
+  "Idle time before showing tooltip in org real diagram."
+  :type 'number
+  :group 'org-real)
+
 ;;;; Faces
 
 (defface org-real-default nil
@@ -167,7 +177,7 @@
 
 (face-spec-set
  'org-real-rel
- '((t :foreground "orange"))
+ '((t :foreground "hot pink"))
  'face-defface-spec)
 
 (defface org-real-popup nil
@@ -176,7 +186,7 @@
 
 (face-spec-set
  'org-real-popup
- '((t :background "light slate blue"
+ '((t :background "midnight blue"
       :foreground "white"))
  'face-defface-spec)
 
@@ -1092,15 +1102,17 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
           (save-excursion
             (if (eq dir 'entered)
                 (progn
-                  (setq timer
-                        (run-with-idle-timer
-                         0.3 nil
-                         (lambda ()
-                           (if (slot-boundp box :metadata)
-                               (org-real--popup metadata)
-                             (if (and (slot-boundp box :name) (slot-boundp box :rel))
-                                 (with-slots ((rel-name name)) rel-box
-                                   (org-real--popup (format "The %s is %s the %s." name rel rel-name))))))))
+                  (if org-real-tooltips
+                      (setq timer
+                            (run-with-idle-timer
+                             org-real-tooltip-timeout nil
+                             (lambda ()
+                               (if (slot-boundp box :metadata)
+                                   (org-real--tooltip metadata)
+                                 (if (and (slot-boundp box :name) (slot-boundp box :rel))
+                                     (with-slots ((rel-name name)) rel-box
+                                       (org-real--tooltip (format "The %s is %s the %s."
+                                                                  name rel rel-name)))))))))
                   (if (slot-boundp box :rel-box)
                       (org-real--draw rel-box 'rel))
                   (org-real--draw box 'selected))
@@ -1739,9 +1751,9 @@ characters if possible."
 
 ;;;; Utility expressions
 
-(defun org-real--popup (str)
+(defun org-real--tooltip (str)
   "Show a popup tooltip with STR contents."
-  (popup-tip str
+  (popup-tip (concat "\n" str "\n")
              :parent-offset 1
              :margin org-real-padding-x))
 
