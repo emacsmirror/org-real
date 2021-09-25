@@ -1,7 +1,7 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 0.3.2
+;; Version: 0.4.0
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
@@ -28,6 +28,10 @@
 ;;   - to the right of
 ;;   - to the left of
 ;;
+;;   The tooltip in `org-real-headlines' shows the values for each row
+;;   in `org-columns' and can be customized the same way as org
+;;   columns view.
+;;
 ;; When in an Org Real mode diagram, the standard movement keys will
 ;; move by boxes rather than characters.  S-TAB will cycle the
 ;; visibility of all children.  Each box has the following keys:
@@ -38,6 +42,9 @@
 ;;             Pressed multiple times, cycle through occurrences.
 ;;   M-RET - Open all occurrences as separate buffers.
 ;;             This will split the current window as needed.
+;;   r     - Jump to the box directly related to the current box.
+;;             Repeated presses will eventually take you to the
+;;             top level box.
 ;;
 
 ;;; Code:
@@ -46,6 +53,7 @@
 
 (require 'eieio)
 (require 'org-element)
+(require 'org-colview)
 (require 'cl-lib)
 
 ;;;; Patch! 0.0.1 -> 0.1.0+
@@ -83,6 +91,13 @@
 
 (and (fboundp 'org-real--apply) (advice-remove 'org-insert-link #'org-real--apply))
 (and (fboundp 'org-real--maybe-edit-link) (advice-remove 'org-insert-link #'org-real--maybe-edit-link))
+
+;;;; Patch! 0.3.2 > 0.4.0+
+;;;; Will be removed in version 1.0.0+
+
+(and (fboundp 'org-real--jump-other-window) (fmakunbound 'org-real--jump-other-window))
+(and (fboundp 'org-real--jump-to) (fmakunbound 'org-real--jump-to))
+(and (fboundp 'org-real--jump-all) (fmakunbound 'org-real--jump-all))
 
 ;;;; Customization variables
 
@@ -125,7 +140,26 @@
   :type 'number
   :group 'org-real)
 
+(defcustom org-real-tooltips t
+  "Show tooltips in an org real diagram."
+  :type 'boolean
+  :group 'org-real)
+
+(defcustom org-real-tooltip-timeout 0.5
+  "Idle time before showing tooltip in org real diagram."
+  :type 'number
+  :group 'org-real)
+
+(defcustom org-real-tooltip-max-width 30
+  "Maximum width of all tooltips."
+  :type 'number
+  :group 'org-real)
+
 ;;;; Faces
+
+(defface org-real-default nil
+  "Default face used in Org Real mode."
+  :group 'org-real)
 
 (defface org-real-primary nil
   "Face for the last thing in a real link."
@@ -136,11 +170,47 @@
  '((t :foreground "light slate blue"))
  'face-defface-spec)
 
+(defface org-real-selected nil
+  "Face for the current box under cursor."
+  :group 'org-real)
+
+(face-spec-set
+ 'org-real-selected
+ '((t :foreground "light slate blue"))
+ 'face-defface-spec)
+
+(defface org-real-rel nil
+  "Face for the box which is related to the box under the cursor."
+  :group 'org-real)
+
+(face-spec-set
+ 'org-real-rel
+ '((t :foreground "hot pink"))
+ 'face-defface-spec)
+
+(defface org-real-popup nil
+  "Face for popups in an Org Real diagram."
+  :group 'org-real)
+
+(face-spec-set
+ 'org-real-popup
+ '((((background dark)) (:background "gray30" :foreground "gray"))
+   (t (:background "gainsboro" :foreground "dim gray")))
+ 'face-defface-spec)
+
 ;;;; Constants & variables
 
 (defconst org-real-prepositions
   '("in" "on" "behind" "in front of" "above" "below" "to the left of" "to the right of" "on top of")
   "List of available prepositions for things.")
+
+(defconst org-real-children-prepositions
+  '("in" "on" "behind" "in front of" "on top of")
+  "List of prepositions which are rendered as children.")
+
+(defconst org-real-flex-prepositions
+  '("in" "on" "behind")
+  "List of prepositions for which boxes are flexibly added to their parent.")
 
 ;;;; Interactive functions
 
@@ -247,18 +317,23 @@ MAX-LEVEL is the maximum level to show headlines for."
 (defvar org-real--box-ring '()
   "List of buffer positions of buttons in an Org Real diagram.")
 (make-variable-buffer-local 'org-real--box-ring)
+
 (defvar org-real--current-box nil
   "Current box the buffer is displaying.")
 (make-variable-buffer-local 'org-real--current-box)
+
 (defvar org-real--current-containers '()
   "Current containers the buffer is displaying.")
 (make-variable-buffer-local 'org-real--current-containers)
+
 (defvar org-real--current-offset 0
   "Current offset for the box diagram.")
 (make-variable-buffer-local 'org-real--current-offset)
+
 (defvar org-real--visibility org-real-default-visibility
   "Visibility of children in the current org real diagram.")
 (make-variable-buffer-local 'org-real--visibility)
+
 (defvar org-real--max-visibility 3
   "Maximum visibility setting allowed when cycling all children.")
 (make-variable-buffer-local 'org-real--max-visibility)
@@ -281,7 +356,7 @@ MAX-LEVEL is the maximum level to show headlines for."
   (let ((col (current-column)))
     (forward-line 1)
     (org-real-mode-cycle)
-    (move-to-column col t)
+    (move-to-column col)
     (let ((pos (point)))
       (goto-char (seq-reduce
                   (lambda (closest p)
@@ -298,7 +373,7 @@ MAX-LEVEL is the maximum level to show headlines for."
   (let ((col (current-column)))
     (forward-line -1)
     (org-real-mode-uncycle)
-    (move-to-column col t)
+    (move-to-column col)
     (let ((pos (point)))
       (goto-char (seq-reduce
                   (lambda (closest p)
@@ -329,25 +404,21 @@ MAX-LEVEL is the maximum level to show headlines for."
   (org-real--flex-adjust org-real--current-box)
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (setq org-real--box-ring '())
     (if org-real--current-containers
         (org-real--pp-text org-real--current-containers))
     (setq org-real--current-offset (- (line-number-at-pos)
                                       org-real-margin-y
                                       (* 2 org-real-padding-y)))
-    (let ((box-coords (org-real--draw org-real--current-box)))
-      (setq org-real--box-ring
-            (seq-sort
-             '<
-             (mapcar
-              (lambda (coords)
-                (forward-line (- (car coords) (line-number-at-pos)))
-                (move-to-column (cdr coords))
-                (point))
-              box-coords))))
+    (org-real--draw org-real--current-box)
+    (org-real-mode-recalculate-box-ring)
     (goto-char (point-max))
     (insert "\n")
     (goto-char 0)))
+
+(defun org-real-mode-recalculate-box-ring ()
+  "Recalculate the position of all boxes in `org-real--current-box'."
+  (setq org-real--box-ring
+        (seq-sort '< (org-real--get-positions org-real--current-box))))
 
 (define-derived-mode org-real-mode special-mode
   "Org Real"
@@ -357,8 +428,10 @@ The following commands are available:
 
 \\{org-real-mode-map}"
   :group 'org-mode
-  (setq indent-tabs-mode nil)
-  (let ((inhibit-message t)) (toggle-truncate-lines t)))
+  (let ((inhibit-message t))
+    (setq indent-tabs-mode nil)
+    (cursor-sensor-mode t)
+    (toggle-truncate-lines t)))
 
 (mapc
  (lambda (key) (define-key org-real-mode-map (kbd (car key)) (cdr key)))
@@ -402,6 +475,8 @@ it.
 VISIBILITY is the initial visibility of children and
 MAX-VISIBILITY is the maximum depth to display when cycling
 visibility."
+  (if-let ((buffer (get-buffer "Org Real")))
+      (kill-buffer buffer))
   (let ((buffer (get-buffer-create "Org Real")))
     (with-current-buffer buffer
       (org-real-mode)
@@ -413,7 +488,6 @@ visibility."
       (org-real-mode-redraw)
       (let* ((width (apply 'max (mapcar 'length (split-string (buffer-string) "\n"))))
              (height (count-lines (point-min) (point-max)))
-             (buffer (get-buffer-create "Org Real"))
              (window (or (get-buffer-window buffer)
                          (display-buffer buffer
                                          `(,(or display-buffer-fn
@@ -456,19 +530,22 @@ visibility."
          (box (org-real--make-instance 'org-real-box (copy-tree containers))))
     (if org-real-include-context
         (let* ((primary-name (plist-get (car (reverse containers)) :name))
-               (children (mapcar
-                          (lambda (containers)
-                            (org-real--make-instance 'org-real-box containers t))
-                          (seq-filter
-                           (lambda (containers)
-                             (let ((rel-containers (reverse containers)))
-                               (pop rel-containers) ;; Exclude copies of the same thing
-                               (seq-some
-                                (lambda (rel-container)
-                                  (string= primary-name (plist-get rel-container :name)))
-                                rel-containers)))
-                           (org-real--parse-buffer)))))
-          (setq box (org-real--merge (push box children)))))
+               (container-matrix (seq-filter
+                                  (lambda (containers)
+                                    (let ((rel-containers (reverse containers)))
+                                      (pop rel-containers) ;; Exclude copies of the same thing
+                                      (seq-some
+                                       (lambda (rel-container)
+                                         (string= primary-name (plist-get rel-container :name)))
+                                       rel-containers)))
+                                  (org-real--parse-buffer)))
+               (context-boxes (mapcar
+                               (lambda (containers)
+                                 (org-real--make-instance 'org-real-box containers t))
+                               container-matrix)))
+          (mapc
+           (lambda (context) (org-real--merge-into context box))
+           context-boxes)))
     (org-real--pp box (copy-tree containers) nil nil 0)))
 
 (defun org-real-complete (&optional existing)
@@ -562,7 +639,7 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
                                                           (ignore-errors
                                                             (url-type
                                                              (url-generic-parse-url link))))
-                                                 (plist-get (car (last (org-real--parse-url link nil)))
+                                                 (plist-get (car (last (org-real--parse-url link)))
                                                             :name))))))
     (unwind-protect
         (if (called-interactively-p 'any)
@@ -587,6 +664,14 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
          :type string)
    (rel :initarg :rel
         :type string)
+   (primary :initarg :primary
+            :initform nil
+            :type boolean)
+   (locations :initarg :locations
+              :initform '()
+              :type list)
+   (metadata :initarg :metadata
+             :type string)
    (rel-box :initarg :rel-box
             :type org-real-box)
    (x-order :initarg :x-order
@@ -630,15 +715,8 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
            :type number)
    (flex :initarg :flex
          :initform nil
-         :type boolean)
-   (primary :initarg :primary
-            :initform nil
-            :type boolean)
-   (locations :initarg :locations
-              :initform '()
-              :type list))
+         :type boolean))
   "A representation of a box in 3D space.")
-
 
 (cl-defmethod org-real--get-all ((collection org-real-box-collection))
   "Get all boxes in COLLECTION as a sequence."
@@ -688,39 +766,78 @@ non-nil, skip setting :primary slot on the last box."
         (org-real--merge-into (pop boxes) world))
       world)))
 
+(cl-defmethod org-real--merge-into ((from org-real-box) (to org-real-box))
+  "Merge FROM box into TO box."
+  (let (match-found)
+    (mapc
+     (lambda (from-box)
+       (let ((match (org-real--find-matching from-box to)))
+         (while (and (not match) (slot-boundp from-box :rel-box))
+           (setq from-box (with-slots (rel-box) from-box rel-box))
+           (setq match (org-real--find-matching from-box to)))
+         (when match
+           (setq match-found t)
+           (org-real--add-matching from-box match))))
+     (org-real--primary-boxes from))
+    (unless match-found
+      (let ((all-from-children (org-real--get-children from 'all)))
+        (with-slots ((to-children children) (to-behind behind)) to
+          (if (= 1 (length all-from-children))
+              (org-real--flex-add (car all-from-children) to)
+            (org-real--flex-add from to)))))))
+
 (cl-defmethod org-real--update-visibility ((box org-real-box))
   "Update visibility of BOX and all of its children."
   (with-slots (level children hidden-children expand-children) box
-    (if (or (= 0 org-real--visibility)
-            (<= level org-real--visibility))
-        (progn
-          (when (slot-boundp box :expand-children)
-            (funcall expand-children box)
-            (slot-makeunbound box :expand-children))
-          (if (org-real--get-all hidden-children)
-              (cl-rotatef children hidden-children))
+    (if (not (org-real--is-visible box))
+        (if (not (org-real--get-all hidden-children)) (cl-rotatef children hidden-children))
+      (when (slot-boundp box :expand-children)
+        (funcall expand-children box)
+        (slot-makeunbound box :expand-children))
+      (if (org-real--get-all hidden-children)
+          (cl-rotatef children hidden-children))
+      (let (fully-expanded)
+        (while (not fully-expanded)
+          (setq fully-expanded t)
           (mapc
            (lambda (child)
              (with-slots (expand-siblings) child
                (when (slot-boundp child :expand-siblings)
                  (funcall expand-siblings child)
-                 (slot-makeunbound child :expand-siblings))))
-           (org-real--get-all children)))
-      (if (not (org-real--get-all hidden-children)) (cl-rotatef children hidden-children)))
-    (mapc 'org-real--update-visibility (append (org-real--get-all children)
-                                               (org-real--get-all hidden-children)))))
+                 (slot-makeunbound child :expand-siblings)
+                 (setq fully-expanded nil))))
+           (org-real--get-all children))))))
+  (mapc 'org-real--update-visibility (org-real--get-children box 'all)))
+
+(cl-defmethod org-real--get-positions ((box org-real-box))
+  "Get the buffer position of the names of BOX and its children."
+  (if-let ((pos (and (slot-boundp box :name)
+                     (let ((top (org-real--get-top box))
+                           (left (org-real--get-left box)))
+                       (forward-line (- (+ org-real--current-offset 1 top org-real-padding-y)
+                                        (line-number-at-pos)))
+                       (move-to-column (+ 1 left org-real-padding-x))
+                       (point)))))
+      (apply 'append (list pos) (mapcar 'org-real--get-positions (org-real--get-children box)))
+    (apply 'append (mapcar 'org-real--get-positions (org-real--get-children box)))))
+
 
 ;;;; Drawing
 
-(cl-defmethod org-real--draw ((box org-real-box))
+(cl-defmethod org-real--draw ((box org-real-box) &optional arg)
   "Insert an ascii drawing of BOX into the current buffer.
 
-OFFSET is the starting line to start insertion.
+If ARG is non-nil, skip drawing children boxes and only update
+text properties on the border.  If ARG is 'selected, draw the
+border using the `org-real-selected' face.  If ARG is 'rel, draw
+the border using `org-real-rel' face, else use `org-real-default'
+face.
+
+Uses `org-real--current-offset' to determine row offset.
 
 Adds to list `org-real--box-ring' the buffer position of each
 button drawn."
-  (let ((children (with-slots (children) box (org-real--get-all children)))
-        box-coords)
+  (let (box-coords)
     (with-slots
         (name
          behind
@@ -744,29 +861,44 @@ button drawn."
                            (when (< (line-number-at-pos) (car coords))
                              (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
                            (move-to-column (cdr coords) t)
-                           (if primary (put-text-property 0 (length str)
-                                                          'face 'org-real-primary str))
-                           (insert str)
-                           (let ((remaining-chars (- (save-excursion (end-of-line) (current-column))
-                                                     (current-column))))
-                             (delete-char (min (length str) remaining-chars))))
+                           (if arg
+                               (ignore-errors
+                                 (put-text-property (point) (+ (length str) (point))
+                                                    'face (cond ((eq arg 'selected) 'org-real-selected)
+                                                                ((eq arg 'rel) 'org-real-rel)
+                                                                (t 'org-real-default))))
+                             (put-text-property 0 (length str)
+                                                'face (if primary
+                                                          'org-real-primary
+                                                        'org-real-default)
+                                                str)
+                             (insert str)
+                             (let ((remaining-chars (- (save-excursion (end-of-line) (current-column))
+                                                       (current-column))))
+                               (delete-char (min (length str) remaining-chars)))))
                      (draw-name (coords str &optional primary)
-                                (if (not locations)
-                                    (draw coords str primary)
-                                  (forward-line (- (car coords) (line-number-at-pos)))
-                                  (when (< (line-number-at-pos) (car coords))
-                                    (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
-                                  (move-to-column (cdr coords) t)
-                                  (setq box-coords coords)
-                                  (if primary (put-text-property 0 (length str)
-                                                                 'face 'org-real-primary str))
-                                  (insert-button str
-                                                 'help-echo "Jump to first occurence"
-                                                 'keymap (org-real--create-button-keymap box))
-                                  (let ((remaining-chars (- (save-excursion (end-of-line)
-                                                                            (current-column))
+                                (when (not arg)
+                                  (if (not locations)
+                                      (draw coords str primary)
+                                    (forward-line (- (car coords) (line-number-at-pos)))
+                                    (when (< (line-number-at-pos) (car coords))
+                                      (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
+                                    (move-to-column (cdr coords) t)
+                                    (setq box-coords coords)
+                                    (if primary (put-text-property 0 (length str)
+                                                                   'face 'org-real-primary
+                                                                   str))
+                                    (put-text-property 0 (length str)
+                                                       'cursor-sensor-functions
+                                                       (list (org-real--create-cursor-function box))
+                                                       str)
+                                    (insert-button str
+                                                   'help-echo "Jump to first occurence"
+                                                   'keymap (org-real--create-button-keymap box))
+                                    (let ((remaining-chars (- (save-excursion (end-of-line)
+                                                                              (current-column))
                                                             (current-column))))
-                                    (delete-char (min (length str) remaining-chars))))))
+                                      (delete-char (min (length str) remaining-chars)))))))
             (draw (cons top left)
                   (concat (if double "╔" "┌")
                           (make-string (- width 2) (cond (dashed #x254c)
@@ -800,9 +932,13 @@ button drawn."
                                         (double "║")
                                         (t "│")))
                 (setq r (+ r 1))))))))
-    (apply 'append
-           (if box-coords (list box-coords) nil)
-           (mapcar 'org-real--draw children))))
+    (if arg
+        (if box-coords (list box-coords) nil)
+      (apply 'append
+             (if box-coords (list box-coords) nil)
+             (mapcar
+              'org-real--draw
+              (org-real--get-children box))))))
 
 (cl-defmethod org-real--get-width ((box org-real-box))
   "Get the width of BOX."
@@ -815,7 +951,7 @@ button drawn."
                        (if (slot-boundp box :name)
                            (with-slots (name) box (length name))
                          0)))
-             (children (with-slots (children) box (org-real--get-all children))))
+             (children (org-real--get-children box)))
         (if (not children)
             (setq stored-width width)
           (let* ((row-indices (cl-delete-duplicates
@@ -855,11 +991,11 @@ button drawn."
           (seq-filter
            (lambda (child) (with-slots (rel) child (and (slot-boundp child :rel)
                                                         (string= rel "on top of"))))
-           (with-slots (children) box (org-real--get-all children))))))
+           (org-real--get-children box)))))
 
 (cl-defmethod org-real--get-on-top-height-helper ((child org-real-box))
   "Get the height of any boxes on top of CHILD, including child."
-  (with-slots (children rel) child
+  (with-slots (rel) child
     (+
      (org-real--get-height child)
      (apply 'max 0
@@ -870,7 +1006,7 @@ button drawn."
                 (with-slots ((grandchild-rel rel)) grandchild
                   (and (slot-boundp grandchild :rel)
                        (string= "on top of" grandchild-rel))))
-              (org-real--get-all children)))))))
+              (org-real--get-children child)))))))
 
 (cl-defmethod org-real--get-height ((box org-real-box) &optional include-on-top)
   "Get the height of BOX.
@@ -885,7 +1021,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                          (* 2 org-real-padding-y)))
               (children (seq-filter
                          (lambda (child) (with-slots (on-top) child (not on-top)))
-                         (with-slots (children) box (org-real--get-all children)))))
+                         (org-real--get-children box))))
           (if (not children)
               (progn
                 (setq stored-height height)
@@ -921,12 +1057,11 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
            (let ((on-top-height (org-real--get-on-top-height box)))
              (if (not (slot-boundp box :parent))
                  (setq stored-top on-top-height)
-               (let* ((siblings (with-slots (children) parent
-                                  (seq-filter
-                                   (lambda (sibling)
-                                     (with-slots (on-top in-front) sibling
-                                       (not (or on-top in-front))))
-                                   (org-real--get-all children))))
+               (let* ((siblings (seq-filter
+                                 (lambda (sibling)
+                                   (with-slots (on-top in-front) sibling
+                                     (not (or on-top in-front))))
+                                 (org-real--get-children parent)))
                       (offset (+ 2 org-real-padding-y org-real-margin-y))
                       (top (+ on-top-height offset (org-real--get-top parent))))
                  (if-let* ((directly-above (seq-reduce
@@ -956,43 +1091,232 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 
 (cl-defmethod org-real--get-left ((box org-real-box))
   "Get the left column index of BOX."
-  (with-slots ((stored-left left)) box
+  (with-slots ((stored-left left) parent x-order y-order) box
     (if (slot-boundp box :left)
         stored-left
       (if (not (slot-boundp box :parent))
           (setq stored-left 0)
-        (with-slots (parent x-order y-order) box
-          (let* ((left (+ 1
-                          org-real-padding-x
-                          (org-real--get-left parent)))
-                 (to-the-left (seq-filter
-                               (lambda (child)
-                                 (with-slots ((child-y y-order) (child-x x-order)) child
-                                   (and (= y-order child-y)
-                                        (< child-x x-order))))
-                               (org-real--get-all (with-slots (children) parent children))))
-                 (directly-left (and to-the-left
-                                     (seq-reduce
-                                      (lambda (max child)
-                                        (with-slots ((max-x x-order)) max
-                                          (with-slots ((child-x x-order)) child
-                                            (if (> child-x max-x)
-                                                child
-                                              max))))
-                                      to-the-left
-                                      (org-real-box :x-order -1.0e+INF)))))
-            (if directly-left
-                (setq stored-left (+ (org-real--get-left directly-left)
-                                     (org-real--get-width directly-left)
-                                     org-real-margin-x))
-              (with-slots (rel rel-box) box
-                (if (and (slot-boundp box :rel)
-                         (or (string= "above" rel)
+        (let* ((left (+ 1
+                        org-real-padding-x
+                        (org-real--get-left parent)))
+               (to-the-left (seq-filter
+                             (lambda (child)
+                               (with-slots ((child-y y-order) (child-x x-order)) child
+                                 (and (= y-order child-y)
+                                      (< child-x x-order))))
+                             (org-real--get-children parent)))
+               (directly-left (and to-the-left
+                                   (seq-reduce
+                                    (lambda (max child)
+                                      (with-slots ((max-x x-order)) max
+                                        (with-slots ((child-x x-order)) child
+                                          (if (> child-x max-x)
+                                              child
+                                            max))))
+                                    to-the-left
+                                    (org-real-box :x-order -1.0e+INF)))))
+          (if directly-left
+              (setq stored-left (+ (org-real--get-left directly-left)
+                                   (org-real--get-width directly-left)
+                                   org-real-margin-x))
+            (with-slots (rel rel-box) box
+              (if (and (slot-boundp box :rel)
+                       (or (string= "above" rel)
                              (string= "below" rel)))
-                    (setq stored-left (org-real--get-left rel-box))
-                  (setq stored-left left))))))))))
+                  (setq stored-left (org-real--get-left rel-box))
+                (setq stored-left left)))))))))
+
+;;;; Org real mode buttons
+
+(cl-defmethod org-real--create-cursor-function ((box org-real-box))
+  "Create cursor functions for entering and leaving BOX."
+  (with-slots (rel rel-box name metadata) box
+    (let (tooltip-timer)
+      (lambda (_window _oldpos dir)
+        (let ((inhibit-read-only t))
+          (save-excursion
+            (if (eq dir 'entered)
+                (progn
+                  (if (slot-boundp box :metadata)
+                      (setq tooltip-timer (org-real--tooltip metadata))
+                    (if (and (slot-boundp box :name) (slot-boundp box :rel))
+                        (with-slots ((rel-name name)) rel-box
+                          (setq tooltip-timer
+                                (org-real--tooltip
+                                 (with-temp-buffer
+                                   (insert (format "The %s is %s the %s."
+                                                   name rel rel-name))
+                                   (let ((fill-column org-real-tooltip-max-width))
+                                     (fill-paragraph t))
+                                   (buffer-string)))))))
+                  (if (slot-boundp box :rel-box)
+                      (org-real--draw rel-box 'rel))
+                  (org-real--draw box 'selected))
+              (if tooltip-timer (cancel-timer tooltip-timer))
+              (if (slot-boundp box :rel-box)
+                  (org-real--draw rel-box t))
+              (org-real--draw box t))))))))
+
+(cl-defmethod org-real--jump-other-window ((box org-real-box))
+  "Jump to location of link for BOX in other window."
+  (with-slots (locations) box
+    (lambda ()
+      (interactive)
+      (let ((first (car locations)))
+        (object-remove-from-list box :locations first)
+        (object-add-to-list box :locations first t))
+      (let* ((marker (car locations))
+             (buffer (marker-buffer marker))
+             (pos (marker-position marker)))
+        (save-selected-window
+          (switch-to-buffer-other-window buffer)
+          (goto-char pos))))))
+
+(cl-defmethod org-real--jump-to ((box org-real-box))
+  "Jump to the first occurrence of a link for BOX in the same window."
+  (with-slots (locations) box
+    (lambda ()
+      (interactive)
+      (let* ((marker (car locations))
+             (buffer (marker-buffer marker))
+             (pos (marker-position marker)))
+        (if-let ((window (get-buffer-window buffer)))
+            (select-window window)
+          (switch-to-buffer buffer))
+        (goto-char pos)))))
+
+(cl-defmethod org-real--jump-all ((box org-real-box))
+  "View all occurrences of links from BOX in the same window."
+  (with-slots (locations) box
+    (lambda ()
+      (interactive)
+      (let* ((size (/ (window-height) (length locations)))
+             (marker (car locations)))
+        (or (<= window-min-height size)
+            (error "To many buffers to visit simultaneously"))
+        (switch-to-buffer (marker-buffer marker))
+        (goto-char (marker-position marker))
+        (dolist (marker (cdr locations))
+          (select-window (split-window nil size))
+          (switch-to-buffer (marker-buffer marker))
+          (goto-char (marker-position marker)))))))
+
+(cl-defmethod org-real--jump-rel ((box org-real-box))
+  "Jump to the box directly related to BOX."
+  (with-slots (rel-box) box
+    (if (not (slot-boundp box :rel-box))
+        (lambda () (interactive))
+      (let ((left (org-real--get-left rel-box))
+            (top (org-real--get-top rel-box)))
+        (lambda ()
+          (interactive)
+          (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
+                           (line-number-at-pos)))
+          (move-to-column (+ left 1 org-real-padding-x)))))))
+
+(cl-defmethod org-real--create-button-keymap ((box org-real-box))
+  "Create a keymap for a button in Org Real mode.
+
+BOX is the box the button is being made for."
+  (with-slots (locations) box
+    (easy-mmode-define-keymap
+     (mapcar
+      (lambda (key) (cons (kbd (car key)) (cdr key)))
+      `(("TAB"       . ,(org-real--cycle-children box))
+        ("o"         . ,(org-real--jump-other-window box))
+        ("r"         . ,(org-real--jump-rel box))
+        ("<mouse-1>" . ,(org-real--jump-to box))
+        ("RET"       . ,(org-real--jump-to box))
+        ("M-RET"     . ,(org-real--jump-all box)))))))
 
 ;;;; Private class methods
+
+(cl-defmethod org-real--is-visible ((box org-real-box))
+  "Determine if BOX is visible according to `org-real--visibility'."
+  (with-slots (level) box
+    (or (= 0 org-real--visibility)
+        (<= level org-real--visibility))))
+
+(cl-defmethod org-real--get-children ((box org-real-box) &optional arg)
+  "Get all visible children of BOX.
+
+If optional ARG is 'all, include hidden children.
+
+If optional ARG is 'hidden, only return hidden children"
+  (with-slots (children hidden-children) box
+    (cond
+     ((eq 'all arg)
+      (append (org-real--get-all children)
+              (org-real--get-all hidden-children)))
+     ((eq 'hidden arg)
+      (org-real--get-all hidden-children))
+     (t
+      (org-real--get-all children)))))
+
+(cl-defmethod org-real--add-child ((parent org-real-box)
+                                   (child org-real-box)
+                                   &optional force-visible)
+  "Add CHILD to PARENT according to its visibility.
+
+If FORCE-VISIBLE, always make CHILD visible in PARENT."
+  (oset child :parent parent)
+  (with-slots (children hidden-children) parent
+    (if (or force-visible (org-real--is-visible child))
+        (setq children (org-real--push children child))
+      (setq hidden-children (org-real--push hidden-children child)))))
+
+(cl-defmethod org-real--get-world ((box org-real-box))
+  "Get the top most box related to BOX."
+  (with-slots (parent) box
+    (if (slot-boundp box :parent)
+        (org-real--get-world parent)
+      box)))
+
+(cl-defmethod org-real--primary-boxes ((box org-real-box))
+  "Get a list of boxes from BOX which have no further relatives."
+  (if (slot-boundp box :parent)
+      (if-let ((next-boxes (org-real--next box)))
+          (apply 'append (mapcar 'org-real--primary-boxes next-boxes))
+        (list box))
+    (apply 'append (mapcar 'org-real--primary-boxes (org-real--get-children box 'all)))))
+
+(cl-defmethod org-real--expand ((box org-real-box))
+  "Get a list of all boxes, including BOX, that are children of BOX."
+  (if (slot-boundp box :parent)
+      (apply 'append (list box) (mapcar 'org-real--expand (org-real--next box)))
+    (apply 'append (mapcar 'org-real--expand (org-real--get-children box 'all)))))
+
+(cl-defmethod org-real--make-dirty ((box org-real-box))
+  "Clear all TOP LEFT WIDTH and HEIGHT coordinates from BOX and its children."
+  (if (slot-boundp box :top) (slot-makeunbound box :top))
+  (if (slot-boundp box :left) (slot-makeunbound box :left))
+  (if (slot-boundp box :width) (slot-makeunbound box :width))
+  (if (slot-boundp box :height) (slot-makeunbound box :height))
+  (mapc 'org-real--make-dirty (org-real--get-children box 'all)))
+
+;; TODO check if `eq' works
+(cl-defmethod org-real--next ((box org-real-box) &optional exclude-children)
+  "Retrieve any boxes for which the :rel-box slot is BOX.
+
+If EXCLUDE-CHILDREN, only retrieve sibling boxes."
+  (let ((relatives (append (if exclude-children '() (org-real--get-children box 'all))
+                           (if (slot-boundp box :parent)
+                               (with-slots (parent) box
+                                 (org-real--get-children parent 'all))
+                             '()))))
+    (seq-filter
+     (lambda (relative)
+       (with-slots (rel-box) relative
+         (and (slot-boundp relative :rel-box)
+              (eq rel-box box))))
+     relatives)))
+
+(cl-defmethod org-real--apply-level ((box org-real-box) level)
+  "Apply LEVEL to BOX and update all of its children."
+  (oset box :level level)
+  (mapc
+   (lambda (child) (org-real--apply-level child (+ 1 level)))
+   (org-real--get-children box 'all)))
 
 (cl-defmethod org-real--make-instance-helper (containers
                                               (parent org-real-box)
@@ -1022,156 +1346,86 @@ PREV must already exist in PARENT."
              (prev-on-top on-top)
              (prev-in-front in-front))
             prev
-          (with-slots ((siblings children) (hidden-siblings hidden-children)) parent
+          (cond
+           ((or (string= rel "in") (string= rel "on"))
+            (setq cur-level (+ 1 prev-level))
+            (setq cur-behind prev-behind))
+           ((string= rel "behind")
+            (setq cur-level (+ 1 prev-level))
+            (setq cur-behind t))
+           ((string= rel "in front of")
+            (setq cur-level (+ 1 prev-level))
+            (setq cur-y 1.0e+INF)
+            (setq cur-behind prev-behind)
+            (setq cur-in-front t))
+           ((string= rel "on top of")
+            (setq cur-level (+ 1 prev-level))
+            (setq cur-y -1.0e+INF)
+            (setq cur-behind prev-behind)
+            (setq cur-on-top t))
+           ((member rel '("above" "below"))
+            (setq cur-behind prev-behind)
+            (setq cur-x prev-x)
             (cond
-             ((or (string= rel "in") (string= rel "on"))
-              (setq cur-level (+ 1 prev-level))
-              (setq cur-behind prev-behind))
-             ((string= rel "behind")
-              (setq cur-level (+ 1 prev-level))
-              (setq cur-behind t))
-             ((string= rel "in front of")
-              (setq cur-level (+ 1 prev-level))
-              (setq cur-y 1.0e+INF)
-              (setq cur-behind prev-behind)
-              (setq cur-in-front t))
-             ((string= rel "on top of")
-              (setq cur-level (+ 1 prev-level))
-              (setq cur-y -1.0e+INF)
-              (setq cur-behind prev-behind)
-              (setq cur-on-top t))
-             ((member rel '("above" "below"))
-              (setq cur-behind prev-behind)
-              (setq cur-x prev-x)
-              (cond
-               ((and prev-in-front (string= rel "below"))
-                (while (with-slots (in-front) prev in-front)
-                  (setq prev (with-slots (parent) prev parent)))
-                (setq parent (with-slots (parent) prev parent)))
-               ((and prev-on-top (string= rel "above"))
-                (while (with-slots (on-top) prev on-top)
-                  (setq prev (with-slots (parent) prev parent)))
-                (setq parent (with-slots (parent) prev parent)))
-               ((and prev-on-top (string= rel "below"))
-                (setq rel "in")
-                (setq prev parent)))
-              (setq cur-level (+ 1 (with-slots (level) parent level)))
-              (let ((sibling-y-orders
-                     (with-slots ((siblings children) (hidden-siblings hidden-children)) parent
-                       (mapcar
-                        (lambda (sibling) (with-slots (y-order) sibling y-order))
-                        (seq-filter
-                         (lambda (sibling)
-                           (with-slots (in-front on-top) sibling
-                             (not (or in-front on-top))))
-                         (append (org-real--get-all siblings)
-                                 (org-real--get-all hidden-siblings)))))))
-                (if (or prev-on-top (string= rel "above"))
-                    (setq cur-y (- (apply 'min 0 sibling-y-orders) 1))
-                  (setq cur-y (+ 1 (apply 'max 0 sibling-y-orders))))))
-             ((member rel '("to the left of" "to the right of"))
-              (setq cur-level prev-level)
-              (setq cur-y prev-y)
-              (setq cur-behind prev-behind)
-              (setq cur-on-top prev-on-top)
-              (setq cur-in-front prev-in-front)
-              (if (string= rel "to the left of")
-                  (setq cur-x prev-x)
-                (setq cur-x (+ 1 prev-x)))
-              (let ((row-siblings (seq-filter
-                                   (lambda (sibling)
-                                     (with-slots (y-order) sibling
-                                       (= prev-y y-order)))
-                                   (append (org-real--get-all siblings)
-                                           (org-real--get-all hidden-siblings)))))
-                (mapc
-                 (lambda (sibling)
-                   (with-slots (x-order) sibling
-                     (if (>= x-order cur-x)
-                         (setq x-order (+ 1 x-order)))))
-                 row-siblings))))
-            (oset box :rel rel)
-            (oset box :rel-box prev)
-            (if (not (slot-boundp box :name)) (setq cur-level 0))
-            (let ((visible (or (= 0 org-real--visibility) (<= cur-level org-real--visibility))))
-              (if (and prev (member rel '("in" "on" "behind" "in front of" "on top of")))
-                  (progn
-                    (oset box :parent prev)
-                    (if visible
-                        (with-slots (children) prev
-                          (setq children (org-real--push children box)))
-                      (with-slots (hidden-children) prev
-                        (setq hidden-children (org-real--push hidden-children box))))
-                    (if containers
-                        (org-real--make-instance-helper containers prev box skip-primary)
-                      (unless skip-primary (oset box :primary t))))
-                (oset box :parent parent)
-                (if visible
-                    (with-slots (children) parent
-                      (setq children (org-real--push children box)))
-                  (with-slots (hidden-children) parent
-                    (setq hidden-children (org-real--push hidden-children box))))
+             ((and prev-in-front (string= rel "below"))
+              (while (with-slots (in-front) prev in-front)
+                (setq prev (with-slots (parent) prev parent)))
+              (setq parent (with-slots (parent) prev parent)))
+             ((and prev-on-top (string= rel "above"))
+              (while (with-slots (on-top) prev on-top)
+                (setq prev (with-slots (parent) prev parent)))
+              (setq parent (with-slots (parent) prev parent)))
+             ((and prev-on-top (string= rel "below"))
+              (setq rel "in")
+              (setq prev parent)))
+            (setq cur-level (+ 1 (with-slots (level) parent level)))
+            (let ((sibling-y-orders
+                   (mapcar
+                    (lambda (sibling) (with-slots (y-order) sibling y-order))
+                    (seq-filter
+                     (lambda (sibling)
+                       (with-slots (in-front on-top) sibling
+                         (not (or in-front on-top))))
+                     (org-real--get-children parent 'all)))))
+              (if (or prev-on-top (string= rel "above"))
+                  (setq cur-y (- (apply 'min 0 sibling-y-orders) 1))
+                (setq cur-y (+ 1 (apply 'max 0 sibling-y-orders))))))
+           ((member rel '("to the left of" "to the right of"))
+            (setq cur-level prev-level)
+            (setq cur-y prev-y)
+            (setq cur-behind prev-behind)
+            (setq cur-on-top prev-on-top)
+            (setq cur-in-front prev-in-front)
+            (if (string= rel "to the left of")
+                (setq cur-x prev-x)
+              (setq cur-x (+ 1 prev-x)))
+            (let ((row-siblings (seq-filter
+                                 (lambda (sibling)
+                                   (with-slots (y-order) sibling
+                                     (= prev-y y-order)))
+                                 (org-real--get-children parent 'all))))
+              (mapc
+               (lambda (sibling)
+                 (with-slots (x-order) sibling
+                   (if (>= x-order cur-x)
+                       (setq x-order (+ 1 x-order)))))
+               row-siblings))))
+          (oset box :rel rel)
+          (oset box :rel-box prev)
+          (if (not (slot-boundp box :name)) (setq cur-level 0))
+          (if (member rel org-real-children-prepositions)
+              (progn
+                (org-real--add-child prev box)
                 (if containers
-                    (org-real--make-instance-helper containers parent box skip-primary)
-                  (unless skip-primary (oset box :primary t))))))))))
-
-(cl-defmethod org-real--get-world ((box org-real-box))
-  "Get the top most box related to BOX."
-  (with-slots (parent) box
-    (if (slot-boundp box :parent)
-        (org-real--get-world parent)
-      box)))
-
-(cl-defmethod org-real--make-dirty (box)
-  "Clear all TOP LEFT WIDTH and HEIGHT coordinates from BOX and its children."
-  (if (slot-boundp box :top) (slot-makeunbound box :top))
-  (if (slot-boundp box :left) (slot-makeunbound box :left))
-  (if (slot-boundp box :width) (slot-makeunbound box :width))
-  (if (slot-boundp box :height) (slot-makeunbound box :height))
-  (with-slots (children hidden-children) box
-    (mapc 'org-real--make-dirty (append (org-real--get-all children)
-                                        (org-real--get-all hidden-children)))))
-
-(cl-defmethod org-real--next ((box org-real-box) &optional exclude-children)
-  "Retrieve any boxes for which the :rel-box slot is BOX.
-
-If EXCLUDE-CHILDREN, only retrieve sibling boxes."
-  (let ((relatives (append (if exclude-children '() (with-slots (children hidden-children) box
-                                                      (append (org-real--get-all children)
-                                                              (org-real--get-all hidden-children))))
-                           (if (slot-boundp box :parent)
-                                (with-slots
-                                    (children hidden-children)
-                                    (with-slots (parent) box parent)
-                                  (append (org-real--get-all children)
-                                          (org-real--get-all hidden-children)))
-                             '()))))
-    (seq-filter
-     (lambda (relative)
-       (with-slots (rel-box) relative
-         (and (slot-boundp relative :rel-box)
-              (string= (with-slots (name) rel-box name)
-                       (with-slots (name) box name)))))
-     relatives)))
-
-(cl-defmethod org-real--expand ((box org-real-box))
-  "Get a list of all boxes, including BOX, that are children of BOX."
-  (if (slot-boundp box :name)
-      (apply 'append (list box) (mapcar 'org-real--expand (org-real--next box)))
-    (with-slots (children) box
-      (apply 'append (mapcar 'org-real--expand (org-real--get-all children))))))
-
-(cl-defmethod org-real--primary-boxes ((box org-real-box))
-  "Get a list of boxes from BOX which have no further relatives."
-  (if (slot-boundp box :name)
-      (if-let ((next-boxes (org-real--next box)))
-          (apply 'append (mapcar 'org-real--primary-boxes next-boxes))
-        (list box))
-    (with-slots (children) box
-      (apply 'append (mapcar 'org-real--primary-boxes (org-real--get-all children))))))
+                    (org-real--make-instance-helper containers prev box skip-primary)
+                  (unless skip-primary (oset box :primary t))))
+            (org-real--add-child parent box)
+            (if containers
+                (org-real--make-instance-helper containers parent box skip-primary)
+              (unless skip-primary (oset box :primary t))))))))
 
 (cl-defmethod org-real--find-matching ((search-box org-real-box) (world org-real-box))
-  "Find and add box to WORLD with a matching name as SEARCH-BOX."
+  "Find a box in WORLD with a matching name as SEARCH-BOX."
   (when (slot-boundp search-box :name)
     (with-slots ((search-name name)) search-box
       (seq-find
@@ -1187,34 +1441,9 @@ If EXCLUDE-CHILDREN, only retrieve sibling boxes."
                            (with-slots (primary) box primary)))
   (oset match :locations (append (with-slots (locations) match locations)
                                  (with-slots (locations) box locations)))
-  (let ((world (org-real--get-world match)))
-    (mapc
-     (lambda (next)
-       (if (not (org-real--find-matching next world))
-           (org-real--add-next next match)))
-     (org-real--next box))))
-
-(cl-defmethod org-real--merge-into ((from org-real-box) (to org-real-box))
-  "Merge FROM box into TO box."
-  (let (match-found)
-    (mapc
-     (lambda (from-box)
-       (let ((match (org-real--find-matching from-box to)))
-         (while (and (not match) (slot-boundp from-box :rel-box))
-           (setq from-box (with-slots (rel-box) from-box rel-box))
-           (setq match (org-real--find-matching from-box to)))
-         (when match
-           (setq match-found t)
-           (org-real--add-matching from-box match))))
-     (org-real--primary-boxes from))
-    (unless match-found
-      (let ((all-from-children (with-slots (children hidden-children) from
-                                 (append (org-real--get-all children)
-                                         (org-real--get-all hidden-children)))))
-        (with-slots ((to-children children) (to-behind behind)) to
-          (if (= 1 (length all-from-children))
-              (org-real--flex-add (car all-from-children) to)
-            (org-real--flex-add from to)))))))
+  (mapc
+   (lambda (next) (org-real--add-next next match))
+   (org-real--next box)))
 
 (cl-defmethod org-real--add-next ((next org-real-box)
                                   (prev org-real-box)
@@ -1235,28 +1464,32 @@ If FORCE-VISIBLE, show the box regardless of
        (prev-in-front in-front)
        (prev-on-top on-top))
       prev
-    (with-slots ((siblings children) (hidden-siblings hidden-children)) parent
-      (with-slots
-          (rel
-           rel-box
-           extra-data
-           (next-level level)
-           (next-y y-order)
-           (next-x x-order)
-           (next-behind behind)
-           (next-in-front in-front)
-           (next-on-top on-top))
-          next
-        (let* ((next-boxes (org-real--next next))
-               (partitioned (seq-group-by
-                             (lambda (next-next)
-                               (with-slots (rel) next-next
-                                 (if (member rel '("in" "on" "behind" "in front of" "on top of"))
-                                     'children
-                                   'siblings)))
-                             next-boxes))
-               (children-boxes (alist-get 'children partitioned))
-               (sibling-boxes (alist-get 'siblings partitioned)))
+    (with-slots
+        (rel
+         rel-box
+         extra-data
+         (next-level level)
+         (next-y y-order)
+         (next-x x-order)
+         (next-behind behind)
+         (next-in-front in-front)
+         (next-on-top on-top))
+        next
+      (let* ((next-boxes (org-real--next next))
+             (partitioned (seq-group-by
+                           (lambda (next-next)
+                             (with-slots (rel) next-next
+                               (if (member rel org-real-children-prepositions)
+                                   'children
+                                 'siblings)))
+                           next-boxes))
+             (children-boxes (alist-get 'children partitioned))
+             (sibling-boxes (alist-get 'siblings partitioned)))
+        (if-let ((match (org-real--find-matching next prev)))
+            (mapc
+             (lambda (next-next)
+               (org-real--add-next next-next match))
+             (org-real--next next))
           (setq extra-data partitioned)
           (cond
            ((member rel '("to the left of" "to the right of"))
@@ -1272,8 +1505,7 @@ If FORCE-VISIBLE, show the box regardless of
                                  (lambda (sibling)
                                    (with-slots (y-order) sibling
                                      (= y-order prev-y)))
-                                 (append (org-real--get-all siblings)
-                                         (org-real--get-all hidden-siblings)))))
+                                 (org-real--get-children parent 'all))))
               (mapc
                (lambda (sibling)
                  (with-slots (x-order) sibling
@@ -1290,8 +1522,7 @@ If FORCE-VISIBLE, show the box regardless of
                                       (lambda (sibling)
                                         (with-slots (in-front on-top) sibling
                                           (not (or in-front on-top))))
-                                      (append (org-real--get-all siblings)
-                                              (org-real--get-all hidden-siblings))))))
+                                      (org-real--get-children parent 'all)))))
               (if (string= rel "above")
                   (setq next-y (- (apply 'min 0 sibling-y-orders) 1))
                 (setq next-y (+ 1 (apply 'max 0 sibling-y-orders))))))
@@ -1305,41 +1536,30 @@ If FORCE-VISIBLE, show the box regardless of
                                          (with-slots (in-front on-top) child
                                            (and (eq next-in-front in-front)
                                                 (eq next-on-top on-top))))
-                                       (append (org-real--get-all children)
-                                               (org-real--get-all hidden-children)))))))
+                                       (org-real--get-children prev 'all))))))
             (setq next-behind prev-behind))
            ((member rel '("in" "on" "behind"))
             (setq next-level (+ 1 prev-level))
             (setq next-behind prev-behind)))
           (if (not (slot-boundp next :name)) (setq next-level 0))
           (oset next :rel-box prev)
-          (let* ((visible (or force-visible (= 0 org-real--visibility) (<= next-level org-real--visibility))))
-            (cond
-             ((member rel '("in front of" "on top of"))
-              (oset next :parent prev)
-              (if visible
-                  (setq children (org-real--push children next))
-                (setq hidden-children (org-real--push hidden-children next))))
-             ((member rel '("in" "on" "behind"))
-              
-              (org-real--flex-add next prev))
-             (t
-              (oset next :parent parent)
-              (if visible
-                  (setq siblings (org-real--push siblings next))
-                (setq hidden-siblings (org-real--push hidden-siblings next)))))
-            (if children-boxes
-                (oset next :expand-children
-                      '(lambda (box)
-                         (mapc
-                          (lambda (child) (org-real--add-next child box))
-                          (alist-get 'children (oref box :extra-data))))))
-            (if sibling-boxes
-                (oset next :expand-siblings
-                      '(lambda (box)
-                         (mapc
-                          (lambda (sibling) (org-real--add-next sibling box t))
-                          (alist-get 'siblings (oref box :extra-data))))))))))))
+          (if (member rel org-real-children-prepositions)
+              (if (member rel org-real-flex-prepositions)
+                  (org-real--flex-add next prev)
+                (org-real--add-child prev next force-visible))
+            (org-real--add-child parent next force-visible))
+          (if children-boxes
+              (oset next :expand-children
+                    '(lambda (box)
+                       (mapc
+                        (lambda (child) (org-real--add-next child box))
+                        (alist-get 'children (oref box :extra-data))))))
+          (if sibling-boxes
+              (oset next :expand-siblings
+                    '(lambda (box)
+                       (mapc
+                        (lambda (sibling) (org-real--add-next sibling box t))
+                        (alist-get 'siblings (oref box :extra-data)))))))))))
 
 (cl-defmethod org-real--flex-add ((box org-real-box)
                                   (parent org-real-box))
@@ -1351,20 +1571,13 @@ characters if possible."
   (let* ((world (org-real--get-world parent))
          (cur-width (org-real--get-width world)))
     (org-real--make-dirty world)
-    (with-slots
-        ((siblings children)
-         (hidden-siblings hidden-children)
-         (parent-level level)
-         (parent-behind behind))
-        parent
+    (with-slots ((parent-level level) (parent-behind behind)) parent
       (let* ((level (+ 1 parent-level))
-             (visible (or (= 0 org-real--visibility) (<= level org-real--visibility)))
              (all-siblings (seq-filter
                             (lambda (sibling)
                               (with-slots (in-front on-top) sibling
                                 (not (or in-front on-top))))
-                            (append (org-real--get-all siblings)
-                                    (org-real--get-all hidden-siblings))))
+                            (org-real--get-children parent 'all)))
              (last-sibling (and all-siblings
                                 (seq-reduce
                                  (lambda (max sibling)
@@ -1378,12 +1591,9 @@ characters if possible."
                                  all-siblings
                                  (org-real-box :y-order -1.0e+INF)))))
         (oset box :flex t)
-        (oset box :parent parent)
         (oset box :behind parent-behind)
         (org-real--apply-level box level)
-        (if visible
-            (setq siblings (org-real--push siblings box))
-          (setq hidden-siblings (org-real--push hidden-siblings box)))
+        (org-real--add-child parent box)
         (when last-sibling
           (with-slots
               ((last-sibling-y y-order)
@@ -1398,75 +1608,67 @@ characters if possible."
                 (oset box :x-order 0)))))))))
 
 (cl-defmethod org-real--flex-adjust ((box org-real-box))
-  "Adjust BOX x and y orders to try to fit world within `org-real-flex-width'."
+  "Adjust BOX x and y orders to try to fit BOX within `org-real-flex-width'."
   (let ((cur-width (org-real--get-width box))
         new-width)
-    (org-real--flex-adjust-helper box)
+    (org-real--flex-adjust-helper box box)
     (setq new-width (org-real--get-width box))
     (while (and (< new-width cur-width)
                 (> new-width org-real-flex-width))
       (setq cur-width new-width)
-      (org-real--flex-adjust-helper box)
+      (org-real--flex-adjust-helper box box)
       (setq new-width (org-real--get-width box)))))
 
-(cl-defmethod org-real--flex-adjust-helper ((box org-real-box))
-  "Adjust BOX x and y orders to try to fit world within `org-real-flex-width'."
-  (with-slots (children flex parent) box
+(cl-defmethod org-real--flex-adjust-helper ((box org-real-box) (world org-real-box))
+  "Adjust BOX x and y orders to try to fit WORLD within `org-real-flex-width'."
+  (with-slots (flex parent) box
     (when flex
-      (let* ((world (org-real--get-world box))
-             (cur-width (org-real--get-width world)))
+      (let ((cur-width (org-real--get-width world)))
         (when (> cur-width org-real-flex-width)
           (let ((left (org-real--get-left box))
                 (width (org-real--get-width box)))
             (when (> (+ left width) org-real-flex-width)
-              (with-slots ((siblings children) (hidden-siblings hidden-children)) parent
-                (org-real--make-dirty world)
-                (when-let* ((all-siblings (seq-filter
-                                           (lambda (sibling)
-                                             (with-slots (in-front on-top) sibling
-                                               (not (or in-front on-top))))
-                                           (append (org-real--get-all siblings)
-                                                   (org-real--get-all hidden-siblings))))
-                            (last-sibling (seq-reduce
-                                           (lambda (max sibling)
-                                             (with-slots ((max-x x-order) (max-y y-order)) max
-                                               (with-slots
-                                                   ((sibling-x x-order)
-                                                    (sibling-y y-order))
+              (org-real--make-dirty world)
+              (when-let* ((all-siblings (seq-filter
+                                         (lambda (sibling)
+                                           (with-slots (in-front on-top) sibling
+                                             (not (or in-front on-top))))
+                                         (org-real--get-children parent)))
+                          (last-sibling (seq-reduce
+                                         (lambda (max sibling)
+                                           (with-slots ((max-x x-order) (max-y y-order)) max
+                                             (with-slots
+                                                 ((sibling-x x-order)
+                                                  (sibling-y y-order))
+                                                 sibling
+                                               (if (> sibling-y max-y)
                                                    sibling
-                                                 (if (> sibling-y max-y)
+                                                 (if (and (= max-y sibling-y) (> sibling-x max-x))
                                                      sibling
-                                                   (if (and (= max-y sibling-y) (> sibling-x max-x))
-                                                       sibling
-                                                     max)))))
-                                           all-siblings
-                                           (org-real-box :y-order -1.0e+INF))))
-                  (with-slots
-                      ((last-sibling-y y-order)
-                       (last-sibling-x x-order))
-                      last-sibling
-                    (oset box :y-order last-sibling-y)
-                    (oset box :x-order (+ 1 last-sibling-x))
-                    (let ((when-last (org-real--get-width world)))
-                      (when (> when-last org-real-flex-width)
-                        (org-real--make-dirty world)
-                        (oset box :y-order (+ 1 last-sibling-y))
-                        (oset box :x-order 0)
-                        (let ((when-new-row (org-real--get-width world)))
-                          (when (>= when-new-row when-last)
-                            (org-real--make-dirty world)
-                            (oset box :y-order last-sibling-y)
-                            (oset box :x-order (+ 1 last-sibling-x))))))))))))))
-    (mapc 'org-real--flex-adjust-helper (org-real--get-all children))))
+                                                   max)))))
+                                         all-siblings
+                                         (org-real-box :y-order -1.0e+INF))))
+                (with-slots
+                    ((last-sibling-y y-order)
+                     (last-sibling-x x-order))
+                    last-sibling
+                  (oset box :y-order last-sibling-y)
+                  (oset box :x-order (+ 1 last-sibling-x))
+                  (let ((when-last (org-real--get-width world)))
+                    (when (> when-last org-real-flex-width)
+                      (org-real--make-dirty world)
+                      (oset box :y-order (+ 1 last-sibling-y))
+                      (oset box :x-order 0)
+                      (let ((when-new-row (org-real--get-width world)))
+                        (when (>= when-new-row when-last)
+                          (org-real--make-dirty world)
+                          (oset box :y-order last-sibling-y)
+                          (oset box :x-order (+ 1 last-sibling-x))))))))))))))
+  (mapc
+   (lambda (child)
+     (org-real--flex-adjust-helper child world))
+   (org-real--get-children box)))
 
-(cl-defmethod org-real--apply-level ((box org-real-box) level)
-  "Apply LEVEL to BOX and update all of its children."
-  (oset box :level level)
-  (with-slots (children hidden-children) box
-    (mapc
-     (lambda (child) (org-real--apply-level child (+ 1 level)))
-     (append (org-real--get-all children)
-             (org-real--get-all hidden-children)))))
 
 (cl-defmethod org-real--add-headline (headline
                                       (parent org-real-box))
@@ -1475,23 +1677,43 @@ characters if possible."
     (with-current-buffer (marker-buffer (car locations))
       (let* ((partitioned (seq-group-by
                            (lambda (h)
-                             (let ((child-rel (or (org-entry-get (org-element-property :begin h) "REL") "in")))
-                               (if (member child-rel '("in" "on" "behind" "in front of" "on top of"))
+                             (let ((child-rel (or (org-entry-get
+                                                   (org-element-property :begin h)
+                                                   "REL")
+                                                  "in")))
+                               (if (member child-rel org-real-children-prepositions)
                                    'children
                                  'siblings)))
                            (cddr headline)))
              (children (alist-get 'children partitioned))
              (siblings (alist-get 'siblings partitioned))
-             (pos (org-element-property :begin headline))
-             (rel (or (org-entry-get pos "REL") "in"))
-             (level (if (member rel '("in" "on" "behind" "in front of" "on top of"))
+             (pos (goto-char (org-element-property :begin headline)))
+             (columns (org-columns--collect-values))
+             (max-column-length (apply 'max 0
+                                       (mapcar
+                                        (lambda (column)
+                                          (length (cadr (car column))))
+                                        columns)))
+             (rel (or (org-entry-get nil "REL") "in"))
+             (level (if (member rel org-real-children-prepositions)
                         (+ 1 parent-level)
                       parent-level))
-             (box (org-real-box :name (org-element-property :title headline)
+             (name (org-element-property :title headline))
+             (box (org-real-box :name (if (string-match org-link-bracket-re name)
+                                          (match-string 2 name)
+                                        name)
                                 :rel rel
                                 :level level
                                 :rel-box parent
                                 :parent parent
+                                :metadata (mapconcat
+                                           (lambda (column)
+                                             (format
+                                              (concat "%" (number-to-string max-column-length) "s : %s")
+                                              (cadr (car column))
+                                              (cadr column)))
+                                           columns
+                                           "\n")
                                 :locations (list (set-marker (point-marker) pos))
                                 :in-front (string= rel "in front of")
                                 :on-top (string= rel "on top of")
@@ -1545,67 +1767,66 @@ characters if possible."
                        (line-number-at-pos)))
       (move-to-column (+ left 1 org-real-padding-x)))))
 
-;;;; Org real mode buttons
-
-(defun org-real--jump-other-window (box)
-  "Jump to location of link for BOX in other window."
-  (with-slots (locations) box
-    (lambda ()
-      (interactive)
-      (let ((first (car locations)))
-        (object-remove-from-list box :locations first)
-        (object-add-to-list box :locations first t))
-      (let* ((marker (car locations))
-             (buffer (marker-buffer marker))
-             (pos (marker-position marker)))
-        (save-selected-window
-          (switch-to-buffer-other-window buffer)
-          (goto-char pos))))))
-
-(defun org-real--jump-to (box)
-  "Jump to the first occurrence of a link for BOX in the same window."
-  (with-slots (locations) box
-    (lambda ()
-      (interactive)
-      (let* ((marker (car locations))
-             (buffer (marker-buffer marker))
-             (pos (marker-position marker)))
-        (if-let ((window (get-buffer-window buffer)))
-            (select-window window)
-          (switch-to-buffer buffer))
-        (goto-char pos)))))
-
-(defun org-real--jump-all (box)
-  "View all occurrences of links from BOX in the same window."
-  (with-slots (locations) box
-    (lambda ()
-      (interactive)
-      (let* ((size (/ (window-height) (length locations)))
-             (marker (car locations)))
-        (or (<= window-min-height size)
-            (error "To many buffers to visit simultaneously"))
-        (switch-to-buffer (marker-buffer marker))
-        (goto-char (marker-position marker))
-        (dolist (marker (cdr locations))
-          (select-window (split-window nil size))
-          (switch-to-buffer (marker-buffer marker))
-          (goto-char (marker-position marker)))))))
-
-(cl-defmethod org-real--create-button-keymap ((box org-real-box))
-  "Create a keymap for a button in Org Real mode.
-
-BOX is the box the button is being made for."
-  (with-slots (locations) box
-    (easy-mmode-define-keymap
-     (mapcar
-      (lambda (key) (cons (kbd (car key)) (cdr key)))
-      `(("TAB"       . ,(org-real--cycle-children box))
-        ("o"         . ,(org-real--jump-other-window box))
-        ("<mouse-1>" . ,(org-real--jump-to box))
-        ("RET"       . ,(org-real--jump-to box))
-        ("M-RET"     . ,(org-real--jump-all box)))))))
-
 ;;;; Utility expressions
+
+(defun org-real--tooltip (content)
+  "Show popup tooltip with CONTENT after `org-real-tooltip-timeout' idle time."
+  (when (and org-real-tooltips (not (string-empty-p content)))
+    (let ((marker (point-marker)))
+      (run-with-idle-timer
+       org-real-tooltip-timeout nil
+       (lambda ()
+         (if (and (eq (marker-buffer marker)
+                      (current-buffer))
+                  (eq (marker-position marker)
+                      (point)))
+             (org-real--tooltip-show content)))))))
+
+(defun org-real--tooltip-show (content)
+  "Show tooltip with CONTENT at point immediately."
+  (let* ((cur-line (line-number-at-pos))
+         (cur-column (current-column))
+         (min-line (save-excursion
+                    (goto-char (window-start))
+                    (line-number-at-pos)))
+         (max-column (+ (window-hscroll) (window-body-width)))
+         (rows (split-string content "\n"))
+         (height (length rows))
+         (width (+ 2 (min org-real-tooltip-max-width
+                          (apply 'max 0 (mapcar 'length rows)))))
+         (top (if (< (- cur-line 2 height) min-line)
+                  (+ cur-line 2)
+                (- cur-line 1 height)))
+         (left (if (> (+ cur-column width 1) max-column)
+                   (- max-column width 1)
+                 cur-column))
+         overlay overlays)
+    (dolist (str rows)
+      (let* ((pos (save-excursion
+                    (forward-line (- top (line-number-at-pos)))
+                    (let ((inhibit-read-only t))
+                      (move-to-column left t))
+                    (point)))
+             (remaining-chars (save-excursion
+                                (goto-char pos)
+                                (- (save-excursion
+                                     (end-of-line)
+                                     (current-column))
+                                   (current-column)))))
+        (setq str (format
+                   (concat " %-" (number-to-string (- width 2)) "s ")
+                   (truncate-string-to-width str org-real-tooltip-max-width nil nil t)))
+        (when (= 0 remaining-chars)
+          (save-excursion (goto-char pos) (let ((inhibit-read-only t)) (insert " ")))
+          (setq remaining-chars (+ 1 remaining-chars)))
+        (setq overlay (make-overlay pos (+ pos (min remaining-chars width))))
+        (overlay-put overlay 'face 'org-real-popup)
+        (overlay-put overlay 'display `((margin nil) ,str))
+        (push overlay overlays)
+        (setq top (+ top 1))))
+    (save-excursion (org-real-mode-recalculate-box-ring))
+    (push (read-event nil) unread-command-events)
+    (mapc 'delete-overlay overlays)))
 
 (defun org-real--find-last-index (pred sequence)
   "Return the index of the last element for which (PRED element) is non-nil in SEQUENCE."
@@ -1639,7 +1860,7 @@ LINK is escaped with backslashes for inclusion in buffer."
         (org-link-escape link)
         (if description (format "[%s]" description) "")))))
 
-(defun org-real--parse-url (str marker)
+(defun org-real--parse-url (str &optional marker)
   "Parse STR into a list of plists.
 
 Returns a list of plists with a :name property and optionally a
@@ -1655,12 +1876,13 @@ set to the :loc slot of each box."
          (containers (mapcar
                       (lambda (token)
                         (let* ((location (split-string token "\\?"))
-                               (container (list :name (car location) :loc marker))
-                               (rel (and (string-match "&?rel=\\([^&]*\\)" (cadr location))
-                                         (match-string 1 (cadr location)))))
-                          (if rel
-                              (plist-put container :rel rel)
-                            container)))
+                               (rel (or (and (cadr location)
+                                             (string-match "&?rel=\\([^&]*\\)" (cadr location))
+                                             (match-string 1 (cadr location)))
+                                        "in")))
+                          (list :name (car location)
+                                :loc marker
+                                :rel rel)))
                       tokens)))
     (push (list :name host :loc marker) containers)))
 
@@ -1680,12 +1902,14 @@ set to the :loc slot of each box."
 
 (defun org-real--parse-headlines ()
   "Create an org real box from the current buffer's headlines."
+  (org-columns-get-format)
   (let* ((headlines (cddr (org-element-parse-buffer 'headline)))
          (filename (buffer-file-name))
          (title (or (concat (file-name-base filename) "." (file-name-extension filename))
                     "Document"))
          (world (org-real-box))
          (document (org-real-box :name title
+                                 :metadata ""
                                  :locations (list (point-min-marker)))))
     (org-real--flex-add document world)
     (mapc
@@ -1701,8 +1925,9 @@ set to the :loc slot of each box."
           (mapconcat
            (lambda (container)
              (concat (plist-get container :name)
-                     (when (plist-member container :rel)
-                       (concat "?rel=" (plist-get container :rel)))))
+                     (when-let ((rel (plist-get container :rel)))
+                       (if (not (string= "in" rel))
+                           (concat "?rel=" (plist-get container :rel))))))
            containers
            "/")))
 
