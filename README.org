@@ -13,6 +13,8 @@ Keep track of real things as org-mode links.
     :init
     (setq org-real-default-visibility 2
           org-real-flex-width 80
+          org-real-tooltips t
+          org-real-tooltip-timeout 0.5
           org-real-include-context t
           org-real-margin-x 2
           org-real-margin-y 1
@@ -45,6 +47,8 @@ Keep track of real things as org-mode links.
        :init
        (setq org-real-default-visibility 2
              org-real-flex-width 80
+             org-real-tooltips t
+             org-real-tooltip-timeout 0.5
              org-real-include-context t
              org-real-margin-x 2
              org-real-margin-y 1
@@ -140,6 +144,7 @@ Keep track of real things as org-mode links.
    - =RET / mouse-1= Jump to first occurrence of link
    - =o= Cycle occurrences of links in other window
    - =M-RET= Open all occurences of links by splitting the current window
+   - =r= Jump to the box directly related to the current box
 
    [[file:demo/org-real-mode.gif]]
 
@@ -176,6 +181,8 @@ Keep track of real things as org-mode links.
    [[file:demo/headline-relationships.png]]
 
 
+   The tooltip for each headline shows the values that would be
+   displayed if the org file was in org columns view.
 * Development
 
 ** Setup
