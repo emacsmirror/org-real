@@ -28,6 +28,10 @@
 ;;   - to the right of
 ;;   - to the left of
 ;;
+;;   The tooltip in `org-real-headlines' shows the values for each row
+;;   in `org-columns' and can be customized the same way as org
+;;   columns view.
+;;
 ;; When in an Org Real mode diagram, the standard movement keys will
 ;; move by boxes rather than characters.  S-TAB will cycle the
 ;; visibility of all children.  Each box has the following keys:
@@ -190,8 +194,8 @@
 
 (face-spec-set
  'org-real-popup
- '((t :background "midnight blue"
-      :foreground "white"))
+ '((((background dark)) (:background "gray30" :foreground "gray"))
+   (t (:background "gainsboro" :foreground "dim gray")))
  'face-defface-spec)
 
 ;;;; Constants & variables
