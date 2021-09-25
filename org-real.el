@@ -217,24 +217,60 @@
 (defun org-real-world ()
   "View all real links in the current buffer."
   (interactive)
-  (org-real--pp
-   (org-real--merge
-    (mapcar
-     (lambda (containers)
-       (org-real--make-instance 'org-real-box containers))
-     (org-real--parse-buffer)))
-   nil nil t))
+  (let ((link (cond
+               ((org-in-regexp org-link-bracket-re 1)
+                (match-string-no-properties 1))
+               ((org-in-regexp org-link-plain-re)
+                (org-unbracket-string "<" ">" (match-string 0)))))
+        (world (org-real--merge
+                (mapcar
+                 (lambda (containers)
+                   (org-real--make-instance 'org-real-box containers))
+                 (org-real--parse-buffer)))))
+    (org-real--pp world nil nil t)
+    (if (and link (string= "real" (ignore-errors (url-type (url-generic-parse-url link)))))
+        (let ((containers (reverse (org-real--parse-url link)))
+              match parent)
+          (while (and containers (not match))
+            (setq match (org-real--find-matching
+                         (org-real-box :name (plist-get (pop containers) :name))
+                         world)))
+          (when match
+            (setq parent (with-slots (parent) match parent))
+            (while (not (org-real--is-visible parent))
+              (setq match parent)
+              (setq parent (with-slots (parent) match parent)))
+            (run-with-timer
+             0 nil
+             (lambda ()
+             (let ((top (org-real--get-top match))
+                   (left (org-real--get-left match)))
+               (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
+                                (line-number-at-pos)))
+               (move-to-column (+ left 1 org-real-padding-x))))))))))
 
 (defun org-real-headlines ()
   "View all org headlines as an org real diagram.
 
 MAX-LEVEL is the maximum level to show headlines for."
   (interactive)
-  (org-real--pp
-   (org-real--parse-headlines)
-   nil
-   'display-buffer-same-window
-   t 1 2))
+  (let ((path (seq-filter 'identity (append (list (org-entry-get nil "ITEM")) (reverse (org-get-outline-path)))))
+        (world (save-excursion (org-real--parse-headlines)))
+        match)
+    (org-real--pp world nil 'display-buffer-same-window t 1 2)
+    (while (and path (not match))
+      (setq match (org-real--find-matching (org-real-box :name (pop path)) world)))
+    (when match
+      (while (not (org-real--is-visible match))
+        (setq match (with-slots (parent) match parent)))
+      (let ((top (org-real--get-top match))
+            (left (org-real--get-left match)))
+        (run-with-timer
+         0 nil
+         (lambda ()
+           (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
+                            (line-number-at-pos)))
+           (move-to-column (+ left 1 org-real-padding-x))))))))
 
 (defun org-real-apply ()
   "Apply any change from the real link at point to the current buffer."
