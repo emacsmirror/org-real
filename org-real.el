@@ -3,7 +3,7 @@
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
 ;; Version: 0.4.0
 ;; File: org-real.el
-;; Package-Requires: ((emacs "26.1") (popup "0.5"))
+;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
 ;; URL: https://gitlab.com/tygrdev/org-real
 
@@ -51,7 +51,6 @@
 (require 'org-element)
 (require 'org-colview)
 (require 'cl-lib)
-(require 'popup)
 
 ;;;; Patch! 0.0.1 -> 0.1.0+
 ;;;; Will be removed in version 1.0.0+
@@ -144,6 +143,11 @@
 
 (defcustom org-real-tooltip-timeout 0.5
   "Idle time before showing tooltip in org real diagram."
+  :type 'number
+  :group 'org-real)
+
+(defcustom org-real-tooltip-max-width 30
+  "Maximum width of all tooltips."
   :type 'number
   :group 'org-real)
 
@@ -348,7 +352,7 @@ MAX-LEVEL is the maximum level to show headlines for."
   (let ((col (current-column)))
     (forward-line 1)
     (org-real-mode-cycle)
-    (move-to-column col t)
+    (move-to-column col)
     (let ((pos (point)))
       (goto-char (seq-reduce
                   (lambda (closest p)
@@ -365,7 +369,7 @@ MAX-LEVEL is the maximum level to show headlines for."
   (let ((col (current-column)))
     (forward-line -1)
     (org-real-mode-uncycle)
-    (move-to-column col t)
+    (move-to-column col)
     (let ((pos (point)))
       (goto-char (seq-reduce
                   (lambda (closest p)
@@ -402,11 +406,15 @@ MAX-LEVEL is the maximum level to show headlines for."
                                       org-real-margin-y
                                       (* 2 org-real-padding-y)))
     (org-real--draw org-real--current-box)
-    (setq org-real--box-ring
-          (seq-sort '< (org-real--get-positions org-real--current-box)))
+    (org-real-mode-recalculate-box-ring)
     (goto-char (point-max))
     (insert "\n")
     (goto-char 0)))
+
+(defun org-real-mode-recalculate-box-ring ()
+  "Recalculate the position of all boxes in `org-real--current-box'."
+  (setq org-real--box-ring
+        (seq-sort '< (org-real--get-positions org-real--current-box))))
 
 (define-derived-mode org-real-mode special-mode
   "Org Real"
@@ -417,9 +425,6 @@ The following commands are available:
 \\{org-real-mode-map}"
   :group 'org-mode
   (let ((inhibit-message t))
-    (face-remap-add-relative
-     'popup-tip-face
-     'org-real-popup)
     (setq indent-tabs-mode nil)
     (cursor-sensor-mode t)
     (toggle-truncate-lines t)))
@@ -1133,8 +1138,13 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                     (if (and (slot-boundp box :name) (slot-boundp box :rel))
                         (with-slots ((rel-name name)) rel-box
                           (setq tooltip-timer
-                                (org-real--tooltip (format "The %s is %s the %s."
-                                                           name rel rel-name))))))
+                                (org-real--tooltip
+                                 (with-temp-buffer
+                                   (insert (format "The %s is %s the %s."
+                                                   name rel rel-name))
+                                   (let ((fill-column org-real-tooltip-max-width))
+                                     (fill-paragraph t))
+                                   (buffer-string)))))))
                   (if (slot-boundp box :rel-box)
                       (org-real--draw rel-box 'rel))
                   (org-real--draw box 'selected))
@@ -1695,7 +1705,7 @@ characters if possible."
                                 :metadata (mapconcat
                                            (lambda (column)
                                              (format
-                                              (concat "%-" (number-to-string max-column-length) "s : %s")
+                                              (concat "%" (number-to-string max-column-length) "s : %s")
                                               (cadr (car column))
                                               (cadr column)))
                                            columns
@@ -1755,10 +1765,10 @@ characters if possible."
 
 ;;;; Utility expressions
 
-(defun org-real--tooltip (str)
-  "Show a popup tooltip with STR contents."
-  (let ((marker (point-marker)))
-    (when org-real-tooltips
+(defun org-real--tooltip (content)
+  "Show popup tooltip with CONTENT after `org-real-tooltip-timeout' idle time."
+  (when (and org-real-tooltips (not (string-empty-p content)))
+    (let ((marker (point-marker)))
       (run-with-idle-timer
        org-real-tooltip-timeout nil
        (lambda ()
@@ -1766,8 +1776,53 @@ characters if possible."
                       (current-buffer))
                   (eq (marker-position marker)
                       (point)))
-             (popup-tip (concat "\n" str "\n")
-                        :margin org-real-padding-x)))))))
+             (org-real--tooltip-show content)))))))
+
+(defun org-real--tooltip-show (content)
+  "Show tooltip with CONTENT at point immediately."
+  (let* ((cur-line (line-number-at-pos))
+         (cur-column (current-column))
+         (min-line (save-excursion
+                    (goto-char (window-start))
+                    (line-number-at-pos)))
+         (max-column (+ (window-hscroll) (window-body-width)))
+         (rows (split-string content "\n"))
+         (height (length rows))
+         (width (+ 2 (min org-real-tooltip-max-width
+                          (apply 'max 0 (mapcar 'length rows)))))
+         (top (if (< (- cur-line 2 height) min-line)
+                  (+ cur-line 2)
+                (- cur-line 1 height)))
+         (left (if (> (+ cur-column width 1) max-column)
+                   (- max-column width 1)
+                 cur-column))
+         overlay overlays)
+    (dolist (str rows)
+      (let* ((pos (save-excursion
+                    (forward-line (- top (line-number-at-pos)))
+                    (let ((inhibit-read-only t))
+                      (move-to-column left t))
+                    (point)))
+             (remaining-chars (save-excursion
+                                (goto-char pos)
+                                (- (save-excursion
+                                     (end-of-line)
+                                     (current-column))
+                                   (current-column)))))
+        (setq str (format
+                   (concat " %-" (number-to-string (- width 2)) "s ")
+                   (truncate-string-to-width str org-real-tooltip-max-width nil nil t)))
+        (when (= 0 remaining-chars)
+          (save-excursion (goto-char pos) (let ((inhibit-read-only t)) (insert " ")))
+          (setq remaining-chars (+ 1 remaining-chars)))
+        (setq overlay (make-overlay pos (+ pos (min remaining-chars width))))
+        (overlay-put overlay 'face 'org-real-popup)
+        (overlay-put overlay 'display `((margin nil) ,str))
+        (push overlay overlays)
+        (setq top (+ top 1))))
+    (save-excursion (org-real-mode-recalculate-box-ring))
+    (push (read-event nil) unread-command-events)
+    (mapc 'delete-overlay overlays)))
 
 (defun org-real--find-last-index (pred sequence)
   "Return the index of the last element for which (PRED element) is non-nil in SEQUENCE."
