@@ -845,7 +845,7 @@ button drawn."
                                                                    str))
                                     (put-text-property 0 (length str)
                                                        'cursor-sensor-functions
-                                                       (list (org-real--create-cursor-functions box))
+                                                       (list (org-real--create-cursor-function box))
                                                        str)
                                     (insert-button str
                                                    'help-echo "Jump to first occurence"
@@ -1393,10 +1393,9 @@ PREV must already exist in PARENT."
                            (with-slots (primary) box primary)))
   (oset match :locations (append (with-slots (locations) match locations)
                                  (with-slots (locations) box locations)))
-  (let ((world (org-real--get-world match)))
-    (mapc
-     (lambda (next) (org-real--add-next next match))
-     (org-real--next box))))
+  (mapc
+   (lambda (next) (org-real--add-next next match))
+   (org-real--next box)))
 
 (cl-defmethod org-real--merge-into ((from org-real-box) (to org-real-box))
   "Merge FROM box into TO box."
