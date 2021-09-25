@@ -518,24 +518,22 @@ visibility."
          (box (org-real--make-instance 'org-real-box (copy-tree containers))))
     (if org-real-include-context
         (let* ((primary-name (plist-get (car (reverse containers)) :name))
-               (context (mapcar
-                         (lambda (containers)
-                           (org-real--make-instance 'org-real-box containers t))
-                         (cl-delete-duplicates
-                          (seq-filter
-                           (lambda (containers)
-                             (let ((rel-containers (reverse containers)))
-                               (pop rel-containers) ;; Exclude copies of the same thing
-                               (seq-some
-                                (lambda (rel-container)
-                                  (string= primary-name (plist-get rel-container :name)))
-                                rel-containers)))
-                           (org-real--parse-buffer))
-                          :test #'string=
-                          :key (lambda (containers) (plist-get (nth (- (length containers) 1)
-                                                                    containers)
-                                                               :name))))))
-          (setq box (org-real--merge (push box context)))))
+               (container-matrix (seq-filter
+                                  (lambda (containers)
+                                    (let ((rel-containers (reverse containers)))
+                                      (pop rel-containers) ;; Exclude copies of the same thing
+                                      (seq-some
+                                       (lambda (rel-container)
+                                         (string= primary-name (plist-get rel-container :name)))
+                                       rel-containers)))
+                                  (org-real--parse-buffer)))
+               (context-boxes (mapcar
+                               (lambda (containers)
+                                 (org-real--make-instance 'org-real-box containers t))
+                               container-matrix)))
+          (mapc
+           (lambda (context) (org-real--merge-into context box))
+           context-boxes)))
     (org-real--pp box (copy-tree containers) nil nil 0)))
 
 (defun org-real-complete (&optional existing)
@@ -1237,7 +1235,7 @@ If FORCE-VISIBLE, always make CHILD visible in PARENT."
 (cl-defmethod org-real--expand ((box org-real-box))
   "Get a list of all boxes, including BOX, that are children of BOX."
   (if (slot-boundp box :parent)
-      (apply 'append (list box) (mapcar 'org-real--expand (org-real--get-children box 'all)))
+      (apply 'append (list box) (mapcar 'org-real--expand (org-real--next box)))
     (apply 'append (mapcar 'org-real--expand (org-real--get-children box 'all)))))
 
 (cl-defmethod org-real--make-dirty ((box org-real-box))
@@ -1397,9 +1395,7 @@ PREV must already exist in PARENT."
                                  (with-slots (locations) box locations)))
   (let ((world (org-real--get-world match)))
     (mapc
-     (lambda (next)
-       (if (not (org-real--find-matching next world))
-           (org-real--add-next next match)))
+     (lambda (next) (org-real--add-next next match))
      (org-real--next box))))
 
 (cl-defmethod org-real--merge-into ((from org-real-box) (to org-real-box))
@@ -1462,76 +1458,81 @@ If FORCE-VISIBLE, show the box regardless of
                            next-boxes))
              (children-boxes (alist-get 'children partitioned))
              (sibling-boxes (alist-get 'siblings partitioned)))
-        (setq extra-data partitioned)
-        (cond
-         ((member rel '("to the left of" "to the right of"))
-          (setq next-level prev-level)
-          (setq next-y prev-y)
-          (setq next-behind prev-behind)
-          (setq next-in-front prev-in-front)
-          (setq next-on-top prev-on-top)
-          (if (string= rel "to the left of")
-              (setq next-x prev-x)
-            (setq next-x (+ 1 prev-x)))
-          (let ((row-siblings (seq-filter
-                               (lambda (sibling)
-                                 (with-slots (y-order) sibling
-                                   (= y-order prev-y)))
-                               (org-real--get-children parent 'all))))
+        (if-let ((match (org-real--find-matching next prev)))
             (mapc
-             (lambda (sibling)
-               (with-slots (x-order) sibling
-                 (if (>= x-order next-x)
-                     (setq x-order (+ 1 x-order)))))
-             row-siblings)))
-         ((member rel '("above" "below"))
-          (setq next-level prev-level)
-          (setq next-x prev-x)
-          (setq next-behind prev-behind)
-          (let ((sibling-y-orders (mapcar
-                                   (lambda (sibling) (with-slots (y-order) sibling y-order))
-                                   (seq-filter
-                                    (lambda (sibling)
-                                      (with-slots (in-front on-top) sibling
-                                        (not (or in-front on-top))))
-                                    (org-real--get-children parent 'all)))))
-            (if (string= rel "above")
-                (setq next-y (- (apply 'min 0 sibling-y-orders) 1))
-              (setq next-y (+ 1 (apply 'max 0 sibling-y-orders))))))
-         ((or next-on-top next-in-front)
-          (setq next-level (+ 1 prev-level))
-          (setq next-x (+ 1 (apply 'max 0
-                                   (mapcar
-                                    (lambda (child) (with-slots (x-order) child x-order))
-                                    (seq-filter
-                                     (lambda (child)
-                                       (with-slots (in-front on-top) child
-                                         (and (eq next-in-front in-front)
-                                              (eq next-on-top on-top))))
-                                     (org-real--get-children prev 'all))))))
-          (setq next-behind prev-behind))
-         ((member rel '("in" "on" "behind"))
-          (setq next-level (+ 1 prev-level))
-          (setq next-behind prev-behind)))
-        (if (not (slot-boundp next :name)) (setq next-level 0))
-        (oset next :rel-box prev)
-        (if (member rel org-real-children-prepositions)
-            (if (member rel org-real-flex-prepositions)
-                (org-real--flex-add next prev)
-              (org-real--add-child prev next force-visible))
-          (org-real--add-child parent next force-visible))
-        (if children-boxes
-            (oset next :expand-children
-                  '(lambda (box)
-                     (mapc
-                      (lambda (child) (org-real--add-next child box))
-                      (alist-get 'children (oref box :extra-data))))))
-        (if sibling-boxes
-            (oset next :expand-siblings
-                  '(lambda (box)
-                     (mapc
-                      (lambda (sibling) (org-real--add-next sibling box t))
-                      (alist-get 'siblings (oref box :extra-data))))))))))
+             (lambda (next-next)
+               (org-real--add-next next-next match))
+             (org-real--next next))
+          (setq extra-data partitioned)
+          (cond
+           ((member rel '("to the left of" "to the right of"))
+            (setq next-level prev-level)
+            (setq next-y prev-y)
+            (setq next-behind prev-behind)
+            (setq next-in-front prev-in-front)
+            (setq next-on-top prev-on-top)
+            (if (string= rel "to the left of")
+                (setq next-x prev-x)
+              (setq next-x (+ 1 prev-x)))
+            (let ((row-siblings (seq-filter
+                                 (lambda (sibling)
+                                   (with-slots (y-order) sibling
+                                     (= y-order prev-y)))
+                                 (org-real--get-children parent 'all))))
+              (mapc
+               (lambda (sibling)
+                 (with-slots (x-order) sibling
+                   (if (>= x-order next-x)
+                       (setq x-order (+ 1 x-order)))))
+               row-siblings)))
+           ((member rel '("above" "below"))
+            (setq next-level prev-level)
+            (setq next-x prev-x)
+            (setq next-behind prev-behind)
+            (let ((sibling-y-orders (mapcar
+                                     (lambda (sibling) (with-slots (y-order) sibling y-order))
+                                     (seq-filter
+                                      (lambda (sibling)
+                                        (with-slots (in-front on-top) sibling
+                                          (not (or in-front on-top))))
+                                      (org-real--get-children parent 'all)))))
+              (if (string= rel "above")
+                  (setq next-y (- (apply 'min 0 sibling-y-orders) 1))
+                (setq next-y (+ 1 (apply 'max 0 sibling-y-orders))))))
+           ((or next-on-top next-in-front)
+            (setq next-level (+ 1 prev-level))
+            (setq next-x (+ 1 (apply 'max 0
+                                     (mapcar
+                                      (lambda (child) (with-slots (x-order) child x-order))
+                                      (seq-filter
+                                       (lambda (child)
+                                         (with-slots (in-front on-top) child
+                                           (and (eq next-in-front in-front)
+                                                (eq next-on-top on-top))))
+                                       (org-real--get-children prev 'all))))))
+            (setq next-behind prev-behind))
+           ((member rel '("in" "on" "behind"))
+            (setq next-level (+ 1 prev-level))
+            (setq next-behind prev-behind)))
+          (if (not (slot-boundp next :name)) (setq next-level 0))
+          (oset next :rel-box prev)
+          (if (member rel org-real-children-prepositions)
+              (if (member rel org-real-flex-prepositions)
+                  (org-real--flex-add next prev)
+                (org-real--add-child prev next force-visible))
+            (org-real--add-child parent next force-visible))
+          (if children-boxes
+              (oset next :expand-children
+                    '(lambda (box)
+                       (mapc
+                        (lambda (child) (org-real--add-next child box))
+                        (alist-get 'children (oref box :extra-data))))))
+          (if sibling-boxes
+              (oset next :expand-siblings
+                    '(lambda (box)
+                       (mapc
+                        (lambda (sibling) (org-real--add-next sibling box t))
+                        (alist-get 'siblings (oref box :extra-data)))))))))))
 
 (cl-defmethod org-real--flex-add ((box org-real-box)
                                   (parent org-real-box))
