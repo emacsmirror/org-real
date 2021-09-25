@@ -1685,7 +1685,9 @@ characters if possible."
                         (+ 1 parent-level)
                       parent-level))
              (name (org-element-property :title headline))
-             (box (org-real-box :name name
+             (box (org-real-box :name (if (string-match org-link-bracket-re name)
+                                          (match-string 2 name)
+                                        name)
                                 :rel rel
                                 :level level
                                 :rel-box parent
