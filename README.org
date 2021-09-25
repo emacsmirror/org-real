@@ -13,6 +13,8 @@ Keep track of real things as org-mode links.
     :init
     (setq org-real-default-visibility 2
           org-real-flex-width 80
+          org-real-tooltips t
+          org-real-tooltip-timeout 0.5
           org-real-include-context t
           org-real-margin-x 2
           org-real-margin-y 1
@@ -45,6 +47,8 @@ Keep track of real things as org-mode links.
        :init
        (setq org-real-default-visibility 2
              org-real-flex-width 80
+             org-real-tooltips t
+             org-real-tooltip-timeout 0.5
              org-real-include-context t
              org-real-margin-x 2
              org-real-margin-y 1
