@@ -43,6 +43,7 @@
                                                     (current-buffer)
                                                     nil t))
                                     (with-current-buffer (get-buffer "*Diff*")
+                                      (message "@@ -actual +expected @@")
                                       (message
                                        (string-join
                                         (butlast
@@ -67,29 +68,53 @@
           (org-element-map (org-element-parse-buffer) 'link
             (lambda (link)
               (goto-char (org-element-property :begin link))
-              (let ((title (and (org-in-regexp org-link-bracket-re)
-                                (match-string 2)))
-                    (result (catch 'result
-                              (save-window-excursion
-                                (condition-case nil
-                                    (org-open-at-point)
-                                  (error (throw 'result nil))))
-                              (string= (get-expected) (get-actual)))))
+              (let* ((title (and (org-in-regexp org-link-bracket-re)
+                                 (match-string 2)))
+                     (org-real-margin-y (if (org-entry-get nil "MARGIN-Y" t)
+                                            (string-to-number (org-entry-get nil "MARGIN-Y" t))
+                                          org-real-margin-y))
+                     (org-real-margin-x (if (org-entry-get nil "MARGIN-X" t)
+                                            (string-to-number (org-entry-get nil "MARGIN-X" t))
+                                          org-real-margin-x))
+                     (org-real-padding-y (if (org-entry-get nil "PADDING-Y" t)
+                                             (string-to-number (org-entry-get nil "PADDING-Y" t))
+                                           org-real-padding-y))
+                     (org-real-padding-x (if (org-entry-get nil "PADDING-X" t)
+                                             (string-to-number (org-entry-get nil "PADDING-X" t))
+                                           org-real-padding-x))
+                     (result (catch 'result
+                               (save-window-excursion
+                                 (condition-case nil
+                                     (org-open-at-point)
+                                   (error (throw 'result nil))))
+                               (string= (get-expected) (get-actual)))))
                 (print-result title result)
                 (set-result result))))
 
           (message "\n  Merging links:\n")
           (org-babel-map-src-blocks nil
             (goto-char beg-block)
-            (let ((title (org-entry-get nil "ITEM"))
-                  (result (catch 'result
-                            (save-window-excursion
-                              (condition-case nil
-                                  (progn
-                                    (org-edit-special)
-                                    (org-real-world))
-                                (error (throw 'result nil))))
-                            (string= (get-expected) (get-actual)))))
+            (let* ((title (org-entry-get nil "ITEM"))
+                   (org-real-margin-y (if (org-entry-get nil "MARGIN-Y")
+                                          (string-to-number (org-entry-get nil "MARGIN-Y" t))
+                                        org-real-margin-y))
+                   (org-real-margin-x (if (org-entry-get nil "MARGIN-X" t)
+                                          (string-to-number (org-entry-get nil "MARGIN-X" t))
+                                        org-real-margin-x))
+                   (org-real-padding-y (if (org-entry-get nil "PADDING-Y" t)
+                                           (string-to-number (org-entry-get nil "PADDING-Y" t))
+                                         org-real-padding-y))
+                   (org-real-padding-x (if (org-entry-get nil "PADDING-X" t)
+                                           (string-to-number (org-entry-get nil "PADDING-X" t))
+                                         org-real-padding-x))
+                   (result (catch 'result
+                             (save-window-excursion
+                               (condition-case nil
+                                   (progn
+                                     (org-edit-special)
+                                     (org-real-world))
+                                 (error (throw 'result nil))))
+                             (string= (get-expected) (get-actual)))))
               (print-result title result)
               (set-result result)))))
       (directory-files "tests" t "\\.org\\'"))
