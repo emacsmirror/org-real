@@ -304,12 +304,11 @@
    ((= 2 org-real--visibility) (message "CONTENTS"))
    ((= 3 org-real--visibility) (message "MORE CONTENTS")))
   (org-real--update-visibility org-real--current-box)
+  (org-real--flex-adjust org-real--current-box org-real--current-box)
   (org-real-mode-redraw))
 
 (defun org-real-mode-redraw ()
   "Redraw `org-real--current-box' in the current buffer."
-  (org-real--make-dirty org-real--current-box)
-  (org-real--flex-adjust org-real--current-box org-real--current-box)
   (let ((inhibit-read-only t))
     (erase-buffer)
     (if org-real--current-containers
@@ -523,6 +522,7 @@ visibility."
       (setq org-real--visibility (or visibility org-real-default-visibility))
       (setq org-real--max-visibility (or max-visibility 3))
       (org-real--update-visibility box)
+      (org-real--flex-adjust box box)
       (org-real-mode-redraw)
       (let* ((width (apply 'max (mapcar 'length (split-string (buffer-string) "\n"))))
              (height (count-lines (point-min) (point-max)))
@@ -823,13 +823,12 @@ non-nil, skip setting :primary slot on the last box."
      (org-real--primary-boxes from))
     (unless match-found
       (let ((all-from-children (org-real--get-children from 'all)))
-        (with-slots ((to-children children) (to-behind behind)) to
-          (if (= 1 (length all-from-children))
-              (progn
-                (oset (car all-from-children) :flex t)
-                (org-real--add-child to (car all-from-children)))
-            (oset from :flex t)
-            (org-real--add-child to from)))))))
+        (if (= 1 (length all-from-children))
+            (progn
+              (oset (car all-from-children) :flex t)
+              (org-real--add-child to (car all-from-children)))
+          (oset from :flex t)
+          (org-real--add-child to from))))))
 
 (cl-defmethod org-real--update-visibility ((box org-real-box))
   "Update visibility of BOX and all of its children."
@@ -1208,8 +1207,12 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                         (org-real--draw rel-box 'rel)))
                   (org-real--draw box 'selected))
               (if tooltip-timer (cancel-timer tooltip-timer))
-              (if (slot-boundp box :rel-box)
-                  (org-real--draw rel-box t))
+              (if (slot-boundp box :display-rel)
+                  (if (org-real--is-visible display-rel t)
+                      (org-real--draw display-rel-box t))
+                (if (and (slot-boundp box :rel-box)
+                         (org-real--is-visible rel-box t))
+                    (org-real--draw rel-box t)))
               (org-real--draw box t))))))))
 
 (cl-defmethod org-real--jump-other-window ((box org-real-box))
@@ -1777,7 +1780,7 @@ characters if possible."
   "Cycle visibility of children of BOX."
   (lambda ()
     (interactive)
-    (with-slots (children hidden-children expand-children expanded) box
+    (with-slots (children hidden-children expand-children expanded parent) box
       (if (slot-boundp box :expand-children)
           (progn
             (funcall expand-children box)
@@ -1795,7 +1798,8 @@ characters if possible."
                  (setq fully-expanded nil)
                  (funcall expand-siblings child)
                  (slot-makeunbound child :expand-siblings))))
-           (org-real--get-all children)))))
+           (org-real--get-all children))))
+      (org-real--flex-adjust parent (org-real--get-world parent)))
     (org-real-mode-redraw)
     (let ((top (org-real--get-top box))
           (left (org-real--get-left box)))
@@ -1854,7 +1858,7 @@ characters if possible."
                    (truncate-string-to-width str org-real-tooltip-max-width nil nil t)))
         (when (= 0 remaining-chars)
           (save-excursion (goto-char pos) (let ((inhibit-read-only t)) (insert " ")))
-          (setq remaining-chars (+ 1 remaining-chars)))
+          (setq remaining-chars 1))
         (setq overlay (make-overlay pos (+ pos (min remaining-chars width))))
         (overlay-put overlay 'face 'org-real-popup)
         (overlay-put overlay 'display `((margin nil) ,str))
