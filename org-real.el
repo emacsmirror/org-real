@@ -1,7 +1,7 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 0.4.1
+;; Version: 0.4.2
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
@@ -226,9 +226,13 @@
   "Current containers the buffer is displaying.")
 (make-variable-buffer-local 'org-real--current-containers)
 
-(defvar org-real--current-offset 0
-  "Current offset for the box diagram.")
-(make-variable-buffer-local 'org-real--current-offset)
+(defvar org-real--current-offset-y 0
+  "Current offset rows for the box diagram.")
+(make-variable-buffer-local 'org-real--current-offset-y)
+
+(defvar org-real--current-offset-x 0
+  "Current offset columns for the box diagram.")
+(make-variable-buffer-local 'org-real--current-offset-x)
 
 (defvar org-real--visibility org-real-default-visibility
   "Visibility of children in the current org real diagram.")
@@ -313,14 +317,15 @@
     (erase-buffer)
     (if org-real--current-containers
         (org-real--pp-text org-real--current-containers))
-    (setq org-real--current-offset (- (line-number-at-pos)
-                                      org-real-margin-y
-                                      (* 2 org-real-padding-y)))
+    (setq org-real--current-offset-y (- (line-number-at-pos)
+                                        2
+                                        (* 2 org-real-padding-y)))
+    (setq org-real--current-offset-x (- 0 1 org-real-padding-x))
     (org-real--draw org-real--current-box)
     (org-real-mode-recalculate-box-ring)
     (goto-char (point-max))
     (insert "\n")
-    (goto-char 0)))
+    (goto-char (point-min))))
 
 (defun org-real-mode-recalculate-box-ring ()
   "Recalculate the position of all boxes in `org-real--current-box'."
@@ -383,14 +388,7 @@ The following commands are available:
                          (org-real-box :name (plist-get (pop containers) :name))
                          world)))
           (when match
-            (let ((top (org-real--get-top match))
-                  (left (org-real--get-left match)))
-              (run-with-timer
-               0 nil
-               (lambda ()
-                 (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
-                                  (line-number-at-pos)))
-                 (move-to-column (+ left 1 org-real-padding-x))))))))))
+            (run-with-timer 0 nil (lambda () (org-real--jump-to-box match))))))))
 
 (defun org-real-headlines ()
   "View all org headlines as an org real diagram.
@@ -404,14 +402,7 @@ MAX-LEVEL is the maximum level to show headlines for."
     (while (and path (or (not match) (not (org-real--is-visible match t))))
       (setq match (org-real--find-matching (org-real-box :name (pop path)) world)))
     (when match
-      (let ((top (org-real--get-top match))
-            (left (org-real--get-left match)))
-        (run-with-timer
-         0 nil
-         (lambda ()
-           (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
-                            (line-number-at-pos)))
-           (move-to-column (+ left 1 org-real-padding-x))))))))
+      (run-with-timer 0 nil (lambda () (org-real--jump-to-box match))))))
 
 (defun org-real-apply ()
   "Apply any change from the real link at point to the current buffer."
@@ -539,8 +530,8 @@ visibility."
   (let* ((reversed (reverse containers))
          (container (pop reversed))
          (primary-name (plist-get container :name)))
-    (dotimes (_ org-real-padding-y) (insert "\n"))
-    (insert (make-string org-real-padding-x ?\s))
+    (dotimes (_ org-real-margin-y) (insert "\n"))
+    (insert (make-string org-real-margin-x ?\s))
     (insert "The ")
     (put-text-property 0 (length primary-name) 'face 'org-real-primary
                        primary-name)
@@ -853,18 +844,46 @@ non-nil, skip setting :primary slot on the last box."
            (org-real--get-all children))))))
   (mapc 'org-real--update-visibility (org-real--get-children box 'all)))
 
+(cl-defmethod org-real--is-visible ((box org-real-box) &optional calculate)
+  "Determine if BOX is visible according to `org-real--visibility'.
+
+If CALCULATE, determine if the box has been expanded manually."
+  (if calculate
+      (with-slots (parent) box
+        (seq-find
+         (lambda (sibling) (eq sibling box))
+         (org-real--get-children parent)))
+    (with-slots (level) box
+      (or (= 0 org-real--visibility)
+          (<= level org-real--visibility)))))
+
 (cl-defmethod org-real--get-positions ((box org-real-box))
   "Get the buffer position of the names of BOX and its children."
-  (if-let ((pos (and (slot-boundp box :name)
-                     (let ((top (org-real--get-top box))
-                           (left (org-real--get-left box)))
-                       (forward-line (- (+ org-real--current-offset 1 top org-real-padding-y)
-                                        (line-number-at-pos)))
-                       (move-to-column (+ 1 left org-real-padding-x))
-                       (point)))))
-      (apply 'append (list pos) (mapcar 'org-real--get-positions (org-real--get-children box)))
+  (if (slot-boundp box :name)
+      (progn
+        (org-real--jump-to-box box)
+        (apply 'append (list (point)) (mapcar 'org-real--get-positions (org-real--get-children box))))
     (apply 'append (mapcar 'org-real--get-positions (org-real--get-children box)))))
 
+
+(cl-defmethod org-real--jump-to-box ((box org-real-box))
+  "Jump cursor to the first character in the label of BOX."
+  (let ((top (org-real--get-top box))
+        (left (org-real--get-left box)))
+    (forward-line (- (+ org-real--current-offset-y top 1 org-real-padding-y)
+                     (line-number-at-pos)))
+    (move-to-column (+ org-real--current-offset-x left 1 org-real-padding-x))))
+
+(cl-defmethod org-real--find-matching ((search-box org-real-box) (world org-real-box))
+  "Find a box in WORLD with a matching name as SEARCH-BOX."
+  (when (slot-boundp search-box :name)
+    (with-slots ((search-name name)) search-box
+      (seq-find
+       (lambda (box)
+         (and (slot-boundp box :name)
+              (string= search-name
+                       (with-slots (name) box name))))
+       (org-real--expand world)))))
 
 ;;;; Drawing
 
@@ -877,7 +896,8 @@ border using the `org-real-selected' face.  If ARG is 'rel, draw
 the border using `org-real-rel' face, else use `org-real-default'
 face.
 
-Uses `org-real--current-offset' to determine row offset.
+Uses `org-real--current-offset-y' and
+`org-real--current-offset-x' to determine row and column offsets.
 
 Adds to list `org-real--box-ring' the buffer position of each
 button drawn."
@@ -893,8 +913,8 @@ button drawn."
          hidden-children)
         box
       (when (slot-boundp box :name)
-        (let* ((top (+ org-real--current-offset (org-real--get-top box)))
-               (left (org-real--get-left box))
+        (let* ((top (+ org-real--current-offset-y (org-real--get-top box)))
+               (left (+ org-real--current-offset-x (org-real--get-left box)))
                (width (org-real--get-width box))
                (height (org-real--get-height box))
                (double (or (org-real--get-all hidden-children)
@@ -1092,7 +1112,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                                   children)))
                    (children-height (seq-reduce
                                      (lambda (sum row)
-                                       (+ sum org-real-padding-y row))
+                                       (+ sum org-real-margin-y row))
                                      (mapcar
                                       (lambda (r)
                                         (apply 'max 0
@@ -1103,7 +1123,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                                                    (with-slots (y-order) child (= r y-order)))
                                                  children))))
                                       row-indices)
-                                     (* -1 org-real-padding-y))))
+                                     (* -1 org-real-margin-y))))
 
               (setq stored-height (+ height children-height))
               (+ stored-height on-top-height))))))))
@@ -1116,13 +1136,13 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
           (t
            (let ((on-top-height (org-real--get-on-top-height box)))
              (if (not (slot-boundp box :parent))
-                 (setq stored-top on-top-height)
+                 (setq stored-top (+ on-top-height org-real-margin-y))
                (let* ((siblings (seq-filter
                                  (lambda (sibling)
                                    (with-slots (on-top in-front) sibling
                                      (not (or on-top in-front))))
                                  (org-real--get-children parent)))
-                      (offset (+ 2 org-real-padding-y org-real-margin-y))
+                      (offset (+ 2 (* 2 org-real-padding-y)))
                       (top (+ on-top-height offset (org-real--get-top parent))))
                  (if-let* ((directly-above (seq-reduce
                                             (lambda (above sibling)
@@ -1155,7 +1175,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
     (if (slot-boundp box :left)
         stored-left
       (if (not (slot-boundp box :parent))
-          (setq stored-left 0)
+          (setq stored-left org-real-margin-x)
         (let* ((left (+ 1
                         org-real-padding-x
                         (org-real--get-left parent)))
@@ -1280,13 +1300,9 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
   (with-slots (rel-box) box
     (if (not (slot-boundp box :rel-box))
         (lambda () (interactive))
-      (let ((left (org-real--get-left rel-box))
-            (top (org-real--get-top rel-box)))
-        (lambda ()
-          (interactive)
-          (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
-                           (line-number-at-pos)))
-          (move-to-column (+ left 1 org-real-padding-x)))))))
+      (lambda ()
+        (interactive)
+        (org-real--jump-to-box box)))))
 
 (cl-defmethod org-real--create-button-keymap ((box org-real-box))
   "Create a keymap for a button in Org Real mode.
@@ -1304,19 +1320,6 @@ BOX is the box the button is being made for."
         ("M-RET"     . ,(org-real--jump-all box)))))))
 
 ;;;; Private class methods
-
-(cl-defmethod org-real--is-visible ((box org-real-box) &optional calculate)
-  "Determine if BOX is visible according to `org-real--visibility'.
-
-If CALCULATE, determine if the box has been expanded manually."
-  (if calculate
-      (with-slots (parent) box
-        (seq-find
-         (lambda (sibling) (eq sibling box))
-         (org-real--get-children parent)))
-    (with-slots (level) box
-      (or (= 0 org-real--visibility)
-          (<= level org-real--visibility)))))
 
 (cl-defmethod org-real--get-children ((box org-real-box) &optional arg)
   "Get all visible children of BOX.
@@ -1483,17 +1486,6 @@ PREV must already exist in PARENT."
             (if containers
                 (org-real--make-instance-helper containers parent box skip-primary)
               (unless skip-primary (oset box :primary t))))))))
-
-(cl-defmethod org-real--find-matching ((search-box org-real-box) (world org-real-box))
-  "Find a box in WORLD with a matching name as SEARCH-BOX."
-  (when (slot-boundp search-box :name)
-    (with-slots ((search-name name)) search-box
-      (seq-find
-       (lambda (box)
-         (and (slot-boundp box :name)
-              (string= search-name
-                       (with-slots (name) box name))))
-       (org-real--expand world)))))
 
 (cl-defmethod org-real--add-matching ((box org-real-box) (match org-real-box))
   "Add relatives of BOX to MATCH."
@@ -1816,11 +1808,7 @@ characters if possible."
            (org-real--get-all children))))
       (org-real--flex-adjust parent (org-real--get-world parent)))
     (org-real-mode-redraw)
-    (let ((top (org-real--get-top box))
-          (left (org-real--get-left box)))
-      (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
-                       (line-number-at-pos)))
-      (move-to-column (+ left 1 org-real-padding-x)))))
+    (org-real--jump-to-box box)))
 
 ;;;; Utility expressions
 
