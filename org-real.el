@@ -212,142 +212,6 @@
   '("in" "on" "behind")
   "List of prepositions for which boxes are flexibly added to their parent.")
 
-;;;; Interactive functions
-
-(defun org-real-world ()
-  "View all real links in the current buffer."
-  (interactive)
-  (let ((link (cond
-               ((org-in-regexp org-link-bracket-re 1)
-                (match-string-no-properties 1))
-               ((org-in-regexp org-link-plain-re)
-                (org-unbracket-string "<" ">" (match-string 0)))))
-        (world (org-real--merge
-                (mapcar
-                 (lambda (containers)
-                   (org-real--make-instance 'org-real-box containers))
-                 (org-real--parse-buffer)))))
-    (org-real--pp world nil nil t)
-    (if (and link (string= "real" (ignore-errors (url-type (url-generic-parse-url link)))))
-        (let ((containers (reverse (org-real--parse-url link)))
-              match parent)
-          (while (and containers (not match))
-            (setq match (org-real--find-matching
-                         (org-real-box :name (plist-get (pop containers) :name))
-                         world)))
-          (when match
-            (setq parent (with-slots (parent) match parent))
-            (while (not (org-real--is-visible parent))
-              (setq match parent)
-              (setq parent (with-slots (parent) match parent)))
-            (run-with-timer
-             0 nil
-             (lambda ()
-             (let ((top (org-real--get-top match))
-                   (left (org-real--get-left match)))
-               (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
-                                (line-number-at-pos)))
-               (move-to-column (+ left 1 org-real-padding-x))))))))))
-
-(defun org-real-headlines ()
-  "View all org headlines as an org real diagram.
-
-MAX-LEVEL is the maximum level to show headlines for."
-  (interactive)
-  (let ((path (seq-filter 'identity (append (list (org-entry-get nil "ITEM")) (reverse (org-get-outline-path)))))
-        (world (save-excursion (org-real--parse-headlines)))
-        match)
-    (org-real--pp world nil 'display-buffer-same-window t 1 2)
-    (while (and path (not match))
-      (setq match (org-real--find-matching (org-real-box :name (pop path)) world)))
-    (when match
-      (while (not (org-real--is-visible match))
-        (setq match (with-slots (parent) match parent)))
-      (let ((top (org-real--get-top match))
-            (left (org-real--get-left match)))
-        (run-with-timer
-         0 nil
-         (lambda ()
-           (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
-                            (line-number-at-pos)))
-           (move-to-column (+ left 1 org-real-padding-x))))))))
-
-(defun org-real-apply ()
-  "Apply any change from the real link at point to the current buffer."
-  (interactive)
-  (let (new-link replace-all)
-    (cond
-     ((org-in-regexp org-link-bracket-re 1)
-      (setq new-link (match-string-no-properties 1)))
-     ((org-in-regexp org-link-plain-re)
-      (setq new-link (org-unbracket-string "<" ">" (match-string 0)))))
-    (when (and new-link
-               (string= "real" (ignore-errors (url-type (url-generic-parse-url new-link)))))
-      (let ((new-containers (reverse (org-real--parse-url new-link (point-marker)))))
-        (while new-containers
-          (let ((primary (plist-get (car new-containers) :name))
-                (changes '())
-                old-containers)
-            (org-element-map (org-element-parse-buffer) 'link
-              (lambda (old-link)
-                (when (string= (org-element-property :type old-link) "real")
-                  (setq old-containers (reverse (org-real--parse-url
-                                                 (org-element-property :raw-link old-link)
-                                                 (set-marker (point-marker) (org-element-property :begin old-link)))))
-                  (when-let* ((new-index 0)
-                              (old-index (seq-position
-                                          old-containers
-                                          primary
-                                          (lambda (a b) (string= (plist-get a :name) b))))
-                              (begin (org-element-property :begin old-link))
-                              (end (org-element-property :end old-link))
-                              (replace-link (org-real--to-link
-                                             (reverse
-                                              (append (cl-subseq old-containers 0 old-index)
-                                                      new-containers)))))
-                    (when (catch 'conflict
-                            (if (not (= (length new-containers) (- (length old-containers) old-index)))
-                                (throw 'conflict t))
-                            (while (< new-index (length new-containers))
-                              (if (or (not (string= (plist-get (nth new-index new-containers) :name)
-                                                    (plist-get (nth old-index old-containers) :name)))
-                                      (not (string= (plist-get (nth new-index new-containers) :rel)
-                                                    (plist-get (nth old-index old-containers) :rel))))
-                                  (throw 'conflict t))
-                              (setq new-index (+ 1 new-index))
-                              (setq old-index (+ 1 old-index)))
-                            nil)
-                      (let* ((old-desc (save-excursion
-                                         (and (goto-char begin)
-                                              (org-in-regexp org-link-bracket-re 1)
-                                              (match-end 2)
-                                              (match-string-no-properties 2))))
-                             (new-link (org-real--link-make-string replace-link old-desc)))
-                        (push
-                         `(lambda ()
-                            (save-excursion
-                              (delete-region ,begin ,end)
-                              (goto-char ,begin)
-                              (insert ,new-link)))
-                         changes)))))))
-            (when (and changes
-                       (or replace-all (let ((response
-                                              (read-char-choice
-                                               (concat
-                                                "Replace all occurrences of "
-                                                primary
-                                                " in current buffer? y/n/a ")
-                                               '(?y ?Y ?n ?N ?a ?A)
-                                               t)))
-                                         (cond
-                                          ((or (= response ?y) (= response ?Y)) t)
-                                          ((or (= response ?n) (= response ?N)) nil)
-                                          ((or (= response ?a) (= response ?A))
-                                           (setq replace-all t))))))
-              (mapc 'funcall changes)))
-          (pop new-containers)))))
-  (message nil))
-
 ;;;; Org Real mode
 
 (defvar org-real--box-ring '()
@@ -487,6 +351,136 @@ The following commands are available:
    ("C-n"       . org-real-mode-cycle-down)
    ("n"         . org-real-mode-cycle-down)
    ("<backtab>" . org-real-mode-cycle-visibility)))
+
+;;;; Interactive functions
+
+(defun org-real-world ()
+  "View all real links in the current buffer."
+  (interactive)
+  (let ((link (cond
+               ((org-in-regexp org-link-bracket-re 1)
+                (match-string-no-properties 1))
+               ((org-in-regexp org-link-plain-re)
+                (org-unbracket-string "<" ">" (match-string 0)))))
+        (world (org-real--merge
+                (mapcar
+                 (lambda (containers)
+                   (org-real--make-instance 'org-real-box containers))
+                 (org-real--parse-buffer)))))
+    (org-real--pp world nil nil t)
+    (if (and link (string= "real" (ignore-errors (url-type (url-generic-parse-url link)))))
+        (let ((containers (reverse (org-real--parse-url link)))
+              match)
+          (while (and containers (or (not match) (not (org-real--is-visible match))))
+            (setq match (org-real--find-matching
+                         (org-real-box :name (plist-get (pop containers) :name))
+                         world)))
+          (when match
+            (let ((top (org-real--get-top match))
+                  (left (org-real--get-left match)))
+              (run-with-timer
+               0 nil
+               (lambda ()
+                 (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
+                                  (line-number-at-pos)))
+                 (move-to-column (+ left 1 org-real-padding-x))))))))))
+
+(defun org-real-headlines ()
+  "View all org headlines as an org real diagram.
+
+MAX-LEVEL is the maximum level to show headlines for."
+  (interactive)
+  (let ((path (seq-filter 'identity (append (list (org-entry-get nil "ITEM")) (reverse (org-get-outline-path)))))
+        (world (save-excursion (org-real--parse-headlines)))
+        match)
+    (org-real--pp world nil 'display-buffer-same-window t 1 2)
+    (while (and path (or (not match) (not (org-real--is-visible match))))
+      (setq match (org-real--find-matching (org-real-box :name (pop path)) world)))
+    (when match
+      (let ((top (org-real--get-top match))
+            (left (org-real--get-left match)))
+        (run-with-timer
+         0 nil
+         (lambda ()
+           (forward-line (- (+ org-real--current-offset top 1 org-real-padding-y)
+                            (line-number-at-pos)))
+           (move-to-column (+ left 1 org-real-padding-x))))))))
+
+(defun org-real-apply ()
+  "Apply any change from the real link at point to the current buffer."
+  (interactive)
+  (let (new-link replace-all)
+    (cond
+     ((org-in-regexp org-link-bracket-re 1)
+      (setq new-link (match-string-no-properties 1)))
+     ((org-in-regexp org-link-plain-re)
+      (setq new-link (org-unbracket-string "<" ">" (match-string 0)))))
+    (when (and new-link
+               (string= "real" (ignore-errors (url-type (url-generic-parse-url new-link)))))
+      (let ((new-containers (reverse (org-real--parse-url new-link (point-marker)))))
+        (while new-containers
+          (let ((primary (plist-get (car new-containers) :name))
+                (changes '())
+                old-containers)
+            (org-element-map (org-element-parse-buffer) 'link
+              (lambda (old-link)
+                (when (string= (org-element-property :type old-link) "real")
+                  (setq old-containers (reverse (org-real--parse-url
+                                                 (org-element-property :raw-link old-link)
+                                                 (set-marker (point-marker) (org-element-property :begin old-link)))))
+                  (when-let* ((new-index 0)
+                              (old-index (seq-position
+                                          old-containers
+                                          primary
+                                          (lambda (a b) (string= (plist-get a :name) b))))
+                              (begin (org-element-property :begin old-link))
+                              (end (org-element-property :end old-link))
+                              (replace-link (org-real--to-link
+                                             (reverse
+                                              (append (cl-subseq old-containers 0 old-index)
+                                                      new-containers)))))
+                    (when (catch 'conflict
+                            (if (not (= (length new-containers) (- (length old-containers) old-index)))
+                                (throw 'conflict t))
+                            (while (< new-index (length new-containers))
+                              (if (or (not (string= (plist-get (nth new-index new-containers) :name)
+                                                    (plist-get (nth old-index old-containers) :name)))
+                                      (not (string= (plist-get (nth new-index new-containers) :rel)
+                                                    (plist-get (nth old-index old-containers) :rel))))
+                                  (throw 'conflict t))
+                              (setq new-index (+ 1 new-index))
+                              (setq old-index (+ 1 old-index)))
+                            nil)
+                      (let* ((old-desc (save-excursion
+                                         (and (goto-char begin)
+                                              (org-in-regexp org-link-bracket-re 1)
+                                              (match-end 2)
+                                              (match-string-no-properties 2))))
+                             (new-link (org-real--link-make-string replace-link old-desc)))
+                        (push
+                         `(lambda ()
+                            (save-excursion
+                              (delete-region ,begin ,end)
+                              (goto-char ,begin)
+                              (insert ,new-link)))
+                         changes)))))))
+            (when (and changes
+                       (or replace-all (let ((response
+                                              (read-char-choice
+                                               (concat
+                                                "Replace all occurrences of "
+                                                primary
+                                                " in current buffer? y/n/a ")
+                                               '(?y ?Y ?n ?N ?a ?A)
+                                               t)))
+                                         (cond
+                                          ((or (= response ?y) (= response ?Y)) t)
+                                          ((or (= response ?n) (= response ?N)) nil)
+                                          ((or (= response ?a) (= response ?A))
+                                           (setq replace-all t))))))
+              (mapc 'funcall changes)))
+          (pop new-containers)))))
+  (message nil))
 
 ;;;; Pretty printing
 
@@ -710,6 +704,10 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
              :type string)
    (rel-box :initarg :rel-box
             :type org-real-box)
+   (display-rel :initarg :display-rel
+                :type string)
+   (display-rel-box :initarg :display-rel-box
+                    :type org-real-box)
    (x-order :initarg :x-order
             :initform 0
             :type number)
@@ -1169,7 +1167,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 
 (cl-defmethod org-real--create-cursor-function ((box org-real-box))
   "Create cursor functions for entering and leaving BOX."
-  (with-slots (rel rel-box name metadata) box
+  (with-slots (rel rel-box display-rel-box display-rel name metadata) box
     (let (tooltip-timer)
       (lambda (_window _oldpos dir)
         (let ((inhibit-read-only t))
@@ -1179,17 +1177,27 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                   (if (slot-boundp box :metadata)
                       (setq tooltip-timer (org-real--tooltip metadata))
                     (if (and (slot-boundp box :name) (slot-boundp box :rel))
-                        (with-slots ((rel-name name)) rel-box
+                        (with-slots ((rel-name name)) (if (slot-boundp box :display-rel-box)
+                                                          display-rel-box
+                                                        rel-box)
                           (setq tooltip-timer
                                 (org-real--tooltip
                                  (with-temp-buffer
                                    (insert (format "The %s is %s the %s."
-                                                   name rel rel-name))
+                                                   name
+                                                   (if (slot-boundp box :display-rel)
+                                                       display-rel
+                                                     rel)
+                                                   rel-name))
                                    (let ((fill-column org-real-tooltip-max-width))
                                      (fill-paragraph t))
                                    (buffer-string)))))))
-                  (if (slot-boundp box :rel-box)
-                      (org-real--draw rel-box 'rel))
+                  (if (slot-boundp box :display-rel-box)
+                      (if (org-real--is-visible display-rel-box)
+                          (org-real--draw display-rel-box 'rel))
+                    (if (and (slot-boundp box :rel-box)
+                             (org-real--is-visible rel-box))
+                      (org-real--draw rel-box 'rel)))
                   (org-real--draw box 'selected))
               (if tooltip-timer (cancel-timer tooltip-timer))
               (if (slot-boundp box :rel-box)
@@ -1272,9 +1280,12 @@ BOX is the box the button is being made for."
 
 (cl-defmethod org-real--is-visible ((box org-real-box))
   "Determine if BOX is visible according to `org-real--visibility'."
-  (with-slots (level) box
+  (with-slots (level parent) box
     (or (= 0 org-real--visibility)
-        (<= level org-real--visibility))))
+        (<= level org-real--visibility)
+        (seq-find
+         (lambda (sibling) (eq sibling box))
+         (org-real--get-children parent)))))
 
 (cl-defmethod org-real--get-children ((box org-real-box) &optional arg)
   "Get all visible children of BOX.
@@ -1408,14 +1419,18 @@ PREV must already exist in PARENT."
             (setq cur-behind prev-behind)
             (cond
              ((and prev-in-front (string= rel "below"))
+              (oset box :display-rel-box prev)
               (while (with-slots (in-front) prev in-front)
                 (setq prev (with-slots (parent) prev parent)))
               (setq parent (with-slots (parent) prev parent)))
              ((and prev-on-top (string= rel "above"))
+              (oset box :display-rel-box prev)
               (while (with-slots (on-top) prev on-top)
                 (setq prev (with-slots (parent) prev parent)))
               (setq parent (with-slots (parent) prev parent)))
              ((and prev-on-top (string= rel "below"))
+              (oset box :display-rel rel)
+              (oset box :display-rel-box prev)
               (setq rel "in")
               (setq prev parent))))
            ((member rel '("to the left of" "to the right of"))
@@ -1551,7 +1566,7 @@ NEXT."
             (setq y-order 1.0e+INF))
         (cond
          ((member rel '("to the left of" "to the right of"))
-          (setq next-y rel-y)
+          (setq y-order rel-y)
           (if (string= rel "to the left of")
               (setq x-order rel-x)
             (setq x-order (+ 1 rel-x)))
@@ -1567,7 +1582,7 @@ NEXT."
                      (setq sibling-x (+ 1 sibling-x)))))
              row-siblings)))
          ((member rel '("above" "below"))
-          (setq next-x rel-x)
+          (setq x-order rel-x)
           (let ((sibling-y-orders (mapcar
                                    (lambda (sibling) (with-slots (y-order) sibling y-order))
                                    (seq-filter
@@ -1597,7 +1612,7 @@ NEXT."
   "Add BOX to a PARENT box flexibly.
 
 This function ignores the :rel slot and adds BOX in such a way
-that the width of the world is kept below `org-real-flex-width'
+that the width of the WORLD is kept below `org-real-flex-width'
 characters if possible."
   (let ((cur-width (org-real--get-width world)))
     (org-real--make-dirty world)
@@ -1656,7 +1671,7 @@ characters if possible."
       (list pass fail))))
 
 (cl-defmethod org-real--flex-adjust ((box org-real-box) (world org-real-box))
-  "Adjust BOX x and y orders to try to fit BOX within `org-real-flex-width'."
+  "Adjust BOX x and y orders to try to fit WORLD within `org-real-flex-width'."
   (with-slots (children) box
     (let* ((partitioned (org-real--partition
                          (lambda (child) (with-slots (flex) child flex))
