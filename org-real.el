@@ -1,7 +1,7 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 0.4.0
+;; Version: 0.4.1
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
@@ -371,7 +371,7 @@ The following commands are available:
     (if (and link (string= "real" (ignore-errors (url-type (url-generic-parse-url link)))))
         (let ((containers (reverse (org-real--parse-url link)))
               match)
-          (while (and containers (or (not match) (not (org-real--is-visible match))))
+          (while (and containers (or (not match) (not (org-real--is-visible match t))))
             (setq match (org-real--find-matching
                          (org-real-box :name (plist-get (pop containers) :name))
                          world)))
@@ -394,7 +394,7 @@ MAX-LEVEL is the maximum level to show headlines for."
         (world (save-excursion (org-real--parse-headlines)))
         match)
     (org-real--pp world nil 'display-buffer-same-window t 1 2)
-    (while (and path (or (not match) (not (org-real--is-visible match))))
+    (while (and path (or (not match) (not (org-real--is-visible match t))))
       (setq match (org-real--find-matching (org-real-box :name (pop path)) world)))
     (when match
       (let ((top (org-real--get-top match))
@@ -1193,10 +1193,10 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                                      (fill-paragraph t))
                                    (buffer-string)))))))
                   (if (slot-boundp box :display-rel-box)
-                      (if (org-real--is-visible display-rel-box)
+                      (if (org-real--is-visible display-rel-box t)
                           (org-real--draw display-rel-box 'rel))
                     (if (and (slot-boundp box :rel-box)
-                             (org-real--is-visible rel-box))
+                             (org-real--is-visible rel-box t))
                       (org-real--draw rel-box 'rel)))
                   (org-real--draw box 'selected))
               (if tooltip-timer (cancel-timer tooltip-timer))
@@ -1278,14 +1278,18 @@ BOX is the box the button is being made for."
 
 ;;;; Private class methods
 
-(cl-defmethod org-real--is-visible ((box org-real-box))
-  "Determine if BOX is visible according to `org-real--visibility'."
-  (with-slots (level parent) box
-    (or (= 0 org-real--visibility)
-        (<= level org-real--visibility)
+(cl-defmethod org-real--is-visible ((box org-real-box) &optional calculate)
+  "Determine if BOX is visible according to `org-real--visibility'.
+
+If CALCULATE, determine if the box has been expanded manually."
+  (if calculate
+      (with-slots (parent) box
         (seq-find
          (lambda (sibling) (eq sibling box))
-         (org-real--get-children parent)))))
+         (org-real--get-children parent)))
+    (with-slots (level) box
+      (or (= 0 org-real--visibility)
+          (<= level org-real--visibility)))))
 
 (cl-defmethod org-real--get-children ((box org-real-box) &optional arg)
   "Get all visible children of BOX.
@@ -1604,7 +1608,7 @@ NEXT."
                                                 (eq on-top child-on-top))))
                                       (org-real--get-children rel-box 'all))))))))
         (org-real--add-child parent box t)))))
-          
+
 
 (cl-defmethod org-real--flex-add ((box org-real-box)
                                   (parent org-real-box)
@@ -1921,7 +1925,6 @@ set to the :loc slot of each box."
                           t))))
     container-matrix))
 
-
 (defun org-real--parse-headlines ()
   "Create an org real box from the current buffer's headlines."
   (org-columns-get-format)
@@ -1939,7 +1942,6 @@ set to the :loc slot of each box."
         (org-real--add-headline headline document))
      headlines)
     world))
-
 
 (defun org-real--to-link (containers)
   "Create a link string from CONTAINERS."
