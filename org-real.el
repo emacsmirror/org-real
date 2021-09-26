@@ -253,36 +253,44 @@
 (defun org-real-mode-cycle-down ()
   "Cycle to the next button on the row below."
   (interactive)
-  (let ((col (current-column)))
-    (forward-line 1)
-    (org-real-mode-cycle)
-    (move-to-column col)
-    (let ((pos (point)))
-      (goto-char (seq-reduce
-                  (lambda (closest p)
-                    (if (< (abs (- pos p))
-                           (abs (- pos closest)))
-                        p
-                      closest))
-                  org-real--box-ring
-                  1.0e+INF)))))
+  (let ((coords (cons (line-number-at-pos) (current-column))))
+    (goto-char (seq-reduce
+                (lambda (closest pos)
+                  (goto-char pos)
+                  (if (<= (line-number-at-pos) (car coords))
+                      closest
+                    (let* ((pos-coords (cons (line-number-at-pos) (current-column)))
+                           (pos-dist (sqrt (+ (expt (- (car pos-coords) (car coords)) 2)
+                                              (expt (- (cdr pos-coords) (cdr coords)) 2))))
+                           (closest-coords (and (goto-char closest) (cons (line-number-at-pos) (current-column))))
+                           (closest-dist (sqrt (+ (expt (- (car closest-coords) (car coords)) 2)
+                                                  (expt (- (cdr closest-coords) (cdr coords)) 2)))))
+                      (if (< pos-dist closest-dist)
+                          pos
+                        closest))))
+                org-real--box-ring
+                (point-max)))))
 
 (defun org-real-mode-cycle-up ()
   "Cycle to the next button on the row above."
   (interactive)
-  (let ((col (current-column)))
-    (forward-line -1)
-    (org-real-mode-uncycle)
-    (move-to-column col)
-    (let ((pos (point)))
-      (goto-char (seq-reduce
-                  (lambda (closest p)
-                    (if (< (abs (- pos p))
-                           (abs (- pos closest)))
-                        p
-                      closest))
-                  org-real--box-ring
-                  1.0e+INF)))))
+  (let ((coords (cons (line-number-at-pos) (current-column))))
+    (goto-char (seq-reduce
+                (lambda (closest pos)
+                  (goto-char pos)
+                  (if (>= (line-number-at-pos) (car coords))
+                      closest
+                    (let* ((pos-coords (cons (line-number-at-pos) (current-column)))
+                           (pos-dist (sqrt (+ (expt (- (car pos-coords) (car coords)) 2)
+                                              (expt (- (cdr pos-coords) (cdr coords)) 2))))
+                           (closest-coords (and (goto-char closest) (cons (line-number-at-pos) (current-column))))
+                           (closest-dist (sqrt (+ (expt (- (car closest-coords) (car coords)) 2)
+                                                  (expt (- (cdr closest-coords) (cdr coords)) 2)))))
+                      (if (< pos-dist closest-dist)
+                          pos
+                        closest))))
+                org-real--box-ring
+                (point-min)))))
 
 (defun org-real-mode-cycle-visibility ()
   "Cycle visibility on all children in the current buffer."
@@ -1197,7 +1205,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                           (org-real--draw display-rel-box 'rel))
                     (if (and (slot-boundp box :rel-box)
                              (org-real--is-visible rel-box t))
-                      (org-real--draw rel-box 'rel)))
+                        (org-real--draw rel-box 'rel)))
                   (org-real--draw box 'selected))
               (if tooltip-timer (cancel-timer tooltip-timer))
               (if (slot-boundp box :rel-box)
@@ -1394,6 +1402,8 @@ PREV must already exist in PARENT."
          (cur-behind behind)
          (cur-on-top on-top)
          (cur-in-front in-front)
+         display-rel
+         display-rel-box
          flex)
         box
         (with-slots
@@ -1423,18 +1433,18 @@ PREV must already exist in PARENT."
             (setq cur-behind prev-behind)
             (cond
              ((and prev-in-front (string= rel "below"))
-              (oset box :display-rel-box prev)
+              (setq display-rel-box prev)
               (while (with-slots (in-front) prev in-front)
                 (setq prev (with-slots (parent) prev parent)))
               (setq parent (with-slots (parent) prev parent)))
              ((and prev-on-top (string= rel "above"))
-              (oset box :display-rel-box prev)
+              (setq display-rel-box prev)
               (while (with-slots (on-top) prev on-top)
                 (setq prev (with-slots (parent) prev parent)))
               (setq parent (with-slots (parent) prev parent)))
              ((and prev-on-top (string= rel "below"))
-              (oset box :display-rel rel)
-              (oset box :display-rel-box prev)
+              (setq display-rel rel)
+              (setq display-rel-box prev)
               (setq rel "in")
               (setq prev parent))))
            ((member rel '("to the left of" "to the right of"))
