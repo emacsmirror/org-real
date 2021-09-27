@@ -1,7 +1,9 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
+;; Copyright (C) 2021 Free Software Foundation, Inc.
+
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 0.4.2
+;; Version: 1.0.0
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
@@ -391,9 +393,7 @@ The following commands are available:
             (run-with-timer 0 nil (lambda () (org-real--jump-to-box match))))))))
 
 (defun org-real-headlines ()
-  "View all org headlines as an org real diagram.
-
-MAX-LEVEL is the maximum level to show headlines for."
+  "View all org headlines as an org real diagram."
   (interactive)
   (let ((path (seq-filter 'identity (append (list (org-entry-get nil "ITEM")) (reverse (org-get-outline-path)))))
         (world (save-excursion (org-real--parse-headlines)))
@@ -503,8 +503,10 @@ it.
 VISIBILITY is the initial visibility of children and
 MAX-VISIBILITY is the maximum depth to display when cycling
 visibility."
-  (if-let ((buffer (get-buffer "Org Real")))
-      (kill-buffer buffer))
+  (when-let ((buffer (get-buffer "Org Real")))
+    (kill-buffer buffer)
+    (if-let ((window (get-buffer-window buffer t)))
+        (delete-window window)))
   (let ((buffer (get-buffer-create "Org Real")))
     (with-current-buffer buffer
       (org-real-mode)
@@ -1702,8 +1704,8 @@ characters if possible."
                          children))
            (flex-children (org-real--get-all (car partitioned)))
            (other-children (org-real--get-all (cadr partitioned))))
-      (setq children (org-real-box-collection))
       (org-real--make-dirty world)
+      (setq children (org-real-box-collection))
       (mapc
        (lambda (flex-child)
          (org-real--flex-add flex-child box world))
