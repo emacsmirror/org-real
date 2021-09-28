@@ -1532,11 +1532,17 @@ NEXT."
          rel-box
          extra-data
          flex
+         display-rel-box
          (next-level level)
          (next-behind behind)
          (next-in-front in-front)
          (next-on-top on-top))
         next
+      (if (slot-boundp next :display-rel-box)
+          (setq display-rel-box
+                (org-real--find-matching
+                 display-rel-box
+                 (org-real--get-world prev))))
       (let* ((next-boxes (org-real--next next))
              (partitioned (seq-group-by
                            (lambda (next-next)
