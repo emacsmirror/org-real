@@ -1213,50 +1213,51 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 
 (cl-defmethod org-real--create-cursor-function ((box org-real-box))
   "Create cursor functions for entering and leaving BOX."
-  (with-slots (rel rel-box display-rel-box display-rel name metadata help-echo) box
+  (with-slots
+      ((actual-rel rel)
+       (actual-rel-box rel-box)
+       display-rel-box
+       display-rel
+       name
+       metadata
+       help-echo)
+      box
     (let (tooltip-timer)
       (lambda (_window _oldpos dir)
-        (let ((inhibit-read-only t))
-          (save-excursion
-            (if (eq dir 'entered)
-                (progn
-                  (if (slot-boundp box :help-echo)
-                      (message help-echo))
-                  (if (slot-boundp box :metadata)
-                      (setq tooltip-timer (org-real--tooltip metadata))
-                    (if (and (slot-boundp box :name) (slot-boundp box :rel))
-                        (with-slots ((rel-name name)) (if (slot-boundp box :display-rel-box)
-                                                          display-rel-box
-                                                        rel-box)
-                          (setq tooltip-timer
-                                (org-real--tooltip
-                                 (with-temp-buffer
-                                   (insert (format (concat "The %s "
-                                                           (if (org-real--is-plural name) "are" "is")
-                                                           " %s the %s.")
-                                                   name
-                                                   (if (slot-boundp box :display-rel)
-                                                       display-rel
-                                                     rel)
-                                                   rel-name))
-                                   (let ((fill-column org-real-tooltip-max-width))
-                                     (fill-paragraph t))
-                                   (buffer-string)))))))
-                  (if (slot-boundp box :display-rel-box)
-                      (if (org-real--is-visible display-rel-box t)
-                          (org-real--draw display-rel-box 'rel))
-                    (if (and (slot-boundp box :rel-box)
-                             (org-real--is-visible rel-box t))
-                        (org-real--draw rel-box 'rel)))
-                  (org-real--draw box 'selected))
-              (if tooltip-timer (cancel-timer tooltip-timer))
-              (if (slot-boundp box :display-rel-box)
-                  (if (org-real--is-visible display-rel-box t)
-                      (org-real--draw display-rel-box t))
-                (if (and (slot-boundp box :rel-box)
-                         (org-real--is-visible rel-box t))
-                    (org-real--draw rel-box t)))
-              (org-real--draw box t))))))))
+        (let* ((rel-box (and (slot-boundp box :rel-box)
+                             (if (slot-boundp box :display-rel-box)
+                                 display-rel-box
+                               actual-rel-box)))
+               (visible-rel-box rel-box))
+          (while (and visible-rel-box (not (org-real--is-visible visible-rel-box t)))
+            (setq visible-rel-box (with-slots (parent) visible-rel-box parent)))
+          (when (eq dir 'entered)
+            (save-excursion
+              (let ((inhibit-read-only t))
+                (org-real--draw box 'selected)
+                (if visible-rel-box (org-real--draw visible-rel-box 'rel))))
+            (if (slot-boundp box :help-echo) (message help-echo))
+            (if (slot-boundp box :metadata)
+                (setq tooltip-timer (org-real--tooltip metadata))
+              (if (and (slot-boundp box :name) rel-box)
+                  (let ((rel-name (with-slots (name) rel-box name))
+                        (rel (if (slot-boundp box :display-rel) display-rel actual-rel)))
+                    (setq tooltip-timer
+                          (org-real--tooltip
+                           (with-temp-buffer
+                             (insert (format (concat "The %s "
+                                                     (if (org-real--is-plural name) "are" "is")
+                                                     " %s the %s.")
+                                             name rel rel-name))
+                             (let ((fill-column org-real-tooltip-max-width))
+                               (fill-paragraph t))
+                             (buffer-string))))))))
+          (when (eq dir 'left)
+            (save-excursion
+              (let ((inhibit-read-only t))
+                (org-real--draw box t)
+                (if visible-rel-box (org-real--draw visible-rel-box t))))
+            (if tooltip-timer (cancel-timer tooltip-timer))))))))
 
 (cl-defmethod org-real--jump-other-window ((box org-real-box))
   "Jump to location of link for BOX in other window."
