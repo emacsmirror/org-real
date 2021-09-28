@@ -1,7 +1,9 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
+;; Copyright (C) 2021 Free Software Foundation, Inc.
+
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 0.4.2
+;; Version: 0.4.3
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools
@@ -55,6 +57,7 @@
 (require 'org-element)
 (require 'org-colview)
 (require 'cl-lib)
+(require 'ispell)
 
 ;;;; Patch! 0.0.1 -> 0.1.0+
 ;;;; Will be removed in version 1.0.0+
@@ -391,9 +394,7 @@ The following commands are available:
             (run-with-timer 0 nil (lambda () (org-real--jump-to-box match))))))))
 
 (defun org-real-headlines ()
-  "View all org headlines as an org real diagram.
-
-MAX-LEVEL is the maximum level to show headlines for."
+  "View all org headlines as an org real diagram."
   (interactive)
   (let ((path (seq-filter 'identity (append (list (org-entry-get nil "ITEM")) (reverse (org-get-outline-path)))))
         (world (save-excursion (org-real--parse-headlines)))
@@ -503,8 +504,10 @@ it.
 VISIBILITY is the initial visibility of children and
 MAX-VISIBILITY is the maximum depth to display when cycling
 visibility."
-  (if-let ((buffer (get-buffer "Org Real")))
-      (kill-buffer buffer))
+  (when-let ((buffer (get-buffer "Org Real")))
+    (kill-buffer buffer)
+    (if-let ((window (get-buffer-window buffer t)))
+        (delete-window window)))
   (let ((buffer (get-buffer-create "Org Real")))
     (with-current-buffer buffer
       (org-real-mode)
@@ -536,7 +539,7 @@ visibility."
     (put-text-property 0 (length primary-name) 'face 'org-real-primary
                        primary-name)
     (insert primary-name)
-    (if reversed (insert " is"))
+    (if reversed (insert (if (org-real--is-plural primary-name) " are" " is")))
     (while reversed
       (insert " ")
       (insert (plist-get container :rel))
@@ -700,6 +703,8 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
               :initform '()
               :type list)
    (metadata :initarg :metadata
+             :type string)
+   (help-echo :initarg :help-echo
              :type string)
    (rel-box :initarg :rel-box
             :type org-real-box)
@@ -942,27 +947,25 @@ button drawn."
                                (delete-char (min (length str) remaining-chars)))))
                      (draw-name (coords str &optional primary)
                                 (when (not arg)
-                                  (if (not locations)
-                                      (draw coords str primary)
-                                    (forward-line (- (car coords) (line-number-at-pos)))
-                                    (when (< (line-number-at-pos) (car coords))
-                                      (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
-                                    (move-to-column (cdr coords) t)
-                                    (setq box-coords coords)
-                                    (if primary (put-text-property 0 (length str)
-                                                                   'face 'org-real-primary
-                                                                   str))
-                                    (put-text-property 0 (length str)
-                                                       'cursor-sensor-functions
-                                                       (list (org-real--create-cursor-function box))
-                                                       str)
-                                    (insert-button str
-                                                   'help-echo "Jump to first occurence"
-                                                   'keymap (org-real--create-button-keymap box))
-                                    (let ((remaining-chars (- (save-excursion (end-of-line)
-                                                                              (current-column))
+                                  (forward-line (- (car coords) (line-number-at-pos)))
+                                  (when (< (line-number-at-pos) (car coords))
+                                    (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
+                                  (move-to-column (cdr coords) t)
+                                  (setq box-coords coords)
+                                  (if primary (put-text-property 0 (length str)
+                                                                 'face 'org-real-primary
+                                                                 str))
+                                  (put-text-property 0 (length str)
+                                                     'cursor-sensor-functions
+                                                     (list (org-real--create-cursor-function box))
+                                                     str)
+                                  (insert-button str
+                                                 'help-echo "Jump to first occurence"
+                                                 'keymap (org-real--create-button-keymap box))
+                                  (let ((remaining-chars (- (save-excursion (end-of-line)
+                                                                            (current-column))
                                                             (current-column))))
-                                      (delete-char (min (length str) remaining-chars)))))))
+                                    (delete-char (min (length str) remaining-chars))))))
             (draw (cons top left)
                   (concat (cond ((and double dashed) "┏")
                                 (double "╔")
@@ -1210,13 +1213,15 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 
 (cl-defmethod org-real--create-cursor-function ((box org-real-box))
   "Create cursor functions for entering and leaving BOX."
-  (with-slots (rel rel-box display-rel-box display-rel name metadata) box
+  (with-slots (rel rel-box display-rel-box display-rel name metadata help-echo) box
     (let (tooltip-timer)
       (lambda (_window _oldpos dir)
         (let ((inhibit-read-only t))
           (save-excursion
             (if (eq dir 'entered)
                 (progn
+                  (if (slot-boundp box :help-echo)
+                      (message help-echo))
                   (if (slot-boundp box :metadata)
                       (setq tooltip-timer (org-real--tooltip metadata))
                     (if (and (slot-boundp box :name) (slot-boundp box :rel))
@@ -1226,7 +1231,9 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                           (setq tooltip-timer
                                 (org-real--tooltip
                                  (with-temp-buffer
-                                   (insert (format "The %s is %s the %s."
+                                   (insert (format (concat "The %s "
+                                                           (if (org-real--is-plural name) "are" "is")
+                                                           " %s the %s.")
                                                    name
                                                    (if (slot-boundp box :display-rel)
                                                        display-rel
@@ -1243,8 +1250,8 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                         (org-real--draw rel-box 'rel)))
                   (org-real--draw box 'selected))
               (if tooltip-timer (cancel-timer tooltip-timer))
-              (if (slot-boundp box :display-rel)
-                  (if (org-real--is-visible display-rel t)
+              (if (slot-boundp box :display-rel-box)
+                  (if (org-real--is-visible display-rel-box t)
                       (org-real--draw display-rel-box t))
                 (if (and (slot-boundp box :rel-box)
                          (org-real--is-visible rel-box t))
@@ -1302,7 +1309,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
         (lambda () (interactive))
       (lambda ()
         (interactive)
-        (org-real--jump-to-box box)))))
+        (org-real--jump-to-box rel-box)))))
 
 (cl-defmethod org-real--create-button-keymap ((box org-real-box))
   "Create a keymap for a button in Org Real mode.
@@ -1312,12 +1319,14 @@ BOX is the box the button is being made for."
     (easy-mmode-define-keymap
      (mapcar
       (lambda (key) (cons (kbd (car key)) (cdr key)))
-      `(("TAB"       . ,(org-real--cycle-children box))
-        ("o"         . ,(org-real--jump-other-window box))
-        ("r"         . ,(org-real--jump-rel box))
-        ("<mouse-1>" . ,(org-real--jump-to box))
-        ("RET"       . ,(org-real--jump-to box))
-        ("M-RET"     . ,(org-real--jump-all box)))))))
+      (append
+       `(("TAB"       . ,(org-real--cycle-children box))
+         ("r"         . ,(org-real--jump-rel box)))
+       (when (and (slot-boundp box :locations) locations)
+         `(("o"         . ,(org-real--jump-other-window box))
+           ("<mouse-1>" . ,(org-real--jump-to box))
+           ("RET"       . ,(org-real--jump-to box))
+           ("M-RET"     . ,(org-real--jump-all box)))))))))
 
 ;;;; Private class methods
 
@@ -1702,8 +1711,8 @@ characters if possible."
                          children))
            (flex-children (org-real--get-all (car partitioned)))
            (other-children (org-real--get-all (cadr partitioned))))
-      (setq children (org-real-box-collection))
       (org-real--make-dirty world)
+      (setq children (org-real-box-collection))
       (mapc
        (lambda (flex-child)
          (org-real--flex-add flex-child box world))
@@ -1971,6 +1980,62 @@ set to the :loc slot of each box."
                            (concat "?rel=" (plist-get container :rel))))))
            containers
            "/")))
+
+(defun org-real--is-plural (noun)
+  "Determine if any word in NOUN has a base (root) word.
+
+Uses either Ispell, aspell, or hunspell based on user settings."
+  (condition-case err
+      (progn
+        (ispell-set-spellchecker-params)
+        (let* ((words (split-string noun))
+               (orig-args (ispell-get-ispell-args))
+               (args (append
+                      (if (and ispell-current-dictionary
+                               (not (member "-d" orig-args)))
+                          (list "-d" ispell-current-dictionary))
+                      orig-args
+                      (if ispell-current-personal-dictionary
+                          (list "-p" ispell-current-personal-dictionary))
+                      (if ispell-encoding8-command
+	                        (if ispell-really-hunspell
+		                          (list ispell-encoding8-command
+			                              (upcase (symbol-name (ispell-get-coding-system))))
+		                        (list
+		                         (concat ispell-encoding8-command
+			                               (symbol-name (ispell-get-coding-system))))))
+                      ispell-extra-args))
+               (mode (cond (ispell-really-aspell "munch")
+                           ((or ispell-really-hunspell
+                                (not (not (string-match-p "ispell" ispell-program-name))))
+                            "-m")
+                           (t (error (concat ispell-program-name " is not supported.")))))
+               (program (concat ispell-program-name " " mode " " (string-join args " ")))
+               (results (mapcar
+                         (lambda (word)
+                           (shell-command-to-string (concat "echo " word " | " program)))
+                         words)))
+          (cond
+           (ispell-really-aspell
+            (seq-some
+             (lambda (result)
+               (not (not (string-match-p "/S" result))))
+             results))
+           (ispell-really-hunspell
+            (seq-some
+             (lambda (result)
+               (not (not (string-match-p "fl:[[:alnum:]]*S[[:alnum:]]*" result))))
+             results))
+           ((not (not (string-match-p "ispell" ispell-program-name)))
+            (seq-some
+             (lambda (result)
+               (not (not (string-match-p "(derives from root" result))))
+             results))
+           (t
+            (error (concat ispell-program-name " is not supported."))))))
+    (error (progn
+             (message (error-message-string err))
+             nil))))
 
 (provide 'org-real)
 
