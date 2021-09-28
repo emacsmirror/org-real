@@ -1309,7 +1309,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
         (lambda () (interactive))
       (lambda ()
         (interactive)
-        (org-real--jump-to-box box)))))
+        (org-real--jump-to-box rel-box)))))
 
 (cl-defmethod org-real--create-button-keymap ((box org-real-box))
   "Create a keymap for a button in Org Real mode.
