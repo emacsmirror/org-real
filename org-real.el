@@ -702,6 +702,8 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
               :type list)
    (metadata :initarg :metadata
              :type string)
+   (help-echo :initarg :help-echo
+             :type string)
    (rel-box :initarg :rel-box
             :type org-real-box)
    (display-rel :initarg :display-rel
@@ -1216,6 +1218,8 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
           (save-excursion
             (if (eq dir 'entered)
                 (progn
+                  (if (slot-boundp box :help-echo)
+                      (message (oref box :help-echo)))
                   (if (slot-boundp box :metadata)
                       (setq tooltip-timer (org-real--tooltip metadata))
                     (if (and (slot-boundp box :name) (slot-boundp box :rel))
