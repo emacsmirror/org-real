@@ -1211,7 +1211,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
 
 (cl-defmethod org-real--create-cursor-function ((box org-real-box))
   "Create cursor functions for entering and leaving BOX."
-  (with-slots (rel rel-box display-rel-box display-rel name metadata) box
+  (with-slots (rel rel-box display-rel-box display-rel name metadata help-echo) box
     (let (tooltip-timer)
       (lambda (_window _oldpos dir)
         (let ((inhibit-read-only t))
@@ -1219,7 +1219,7 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
             (if (eq dir 'entered)
                 (progn
                   (if (slot-boundp box :help-echo)
-                      (message (oref box :help-echo)))
+                      (message help-echo))
                   (if (slot-boundp box :metadata)
                       (setq tooltip-timer (org-real--tooltip metadata))
                     (if (and (slot-boundp box :name) (slot-boundp box :rel))
@@ -1320,7 +1320,7 @@ BOX is the box the button is being made for."
       (append
        `(("TAB"       . ,(org-real--cycle-children box))
          ("r"         . ,(org-real--jump-rel box)))
-       (when (oref box :locations)
+       (when (and (slot-boundp box :locations) locations)
          `(("o"         . ,(org-real--jump-other-window box))
            ("<mouse-1>" . ,(org-real--jump-to box))
            ("RET"       . ,(org-real--jump-to box))
