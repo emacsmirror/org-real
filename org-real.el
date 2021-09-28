@@ -943,27 +943,25 @@ button drawn."
                                (delete-char (min (length str) remaining-chars)))))
                      (draw-name (coords str &optional primary)
                                 (when (not arg)
-                                  (if (not locations)
-                                      (draw coords str primary)
-                                    (forward-line (- (car coords) (line-number-at-pos)))
-                                    (when (< (line-number-at-pos) (car coords))
-                                      (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
-                                    (move-to-column (cdr coords) t)
-                                    (setq box-coords coords)
-                                    (if primary (put-text-property 0 (length str)
-                                                                   'face 'org-real-primary
-                                                                   str))
-                                    (put-text-property 0 (length str)
-                                                       'cursor-sensor-functions
-                                                       (list (org-real--create-cursor-function box))
-                                                       str)
-                                    (insert-button str
-                                                   'help-echo "Jump to first occurence"
-                                                   'keymap (org-real--create-button-keymap box))
-                                    (let ((remaining-chars (- (save-excursion (end-of-line)
-                                                                              (current-column))
+                                  (forward-line (- (car coords) (line-number-at-pos)))
+                                  (when (< (line-number-at-pos) (car coords))
+                                    (insert (make-string (- (car coords) (line-number-at-pos)) ?\n)))
+                                  (move-to-column (cdr coords) t)
+                                  (setq box-coords coords)
+                                  (if primary (put-text-property 0 (length str)
+                                                                 'face 'org-real-primary
+                                                                 str))
+                                  (put-text-property 0 (length str)
+                                                     'cursor-sensor-functions
+                                                     (list (org-real--create-cursor-function box))
+                                                     str)
+                                  (insert-button str
+                                                 'help-echo "Jump to first occurence"
+                                                 'keymap (org-real--create-button-keymap box))
+                                  (let ((remaining-chars (- (save-excursion (end-of-line)
+                                                                            (current-column))
                                                             (current-column))))
-                                      (delete-char (min (length str) remaining-chars)))))))
+                                    (delete-char (min (length str) remaining-chars))))))
             (draw (cons top left)
                   (concat (cond ((and double dashed) "┏")
                                 (double "╔")
@@ -1315,12 +1313,14 @@ BOX is the box the button is being made for."
     (easy-mmode-define-keymap
      (mapcar
       (lambda (key) (cons (kbd (car key)) (cdr key)))
-      `(("TAB"       . ,(org-real--cycle-children box))
-        ("o"         . ,(org-real--jump-other-window box))
-        ("r"         . ,(org-real--jump-rel box))
-        ("<mouse-1>" . ,(org-real--jump-to box))
-        ("RET"       . ,(org-real--jump-to box))
-        ("M-RET"     . ,(org-real--jump-all box)))))))
+      (append
+       `(("TAB"       . ,(org-real--cycle-children box))
+         ("r"         . ,(org-real--jump-rel box)))
+       (when (oref box :locations)
+         `(("o"         . ,(org-real--jump-other-window box))
+           ("<mouse-1>" . ,(org-real--jump-to box))
+           ("RET"       . ,(org-real--jump-to box))
+           ("M-RET"     . ,(org-real--jump-all box)))))))))
 
 ;;;; Private class methods
 
