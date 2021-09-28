@@ -55,6 +55,7 @@
 (require 'org-element)
 (require 'org-colview)
 (require 'cl-lib)
+(require 'ispell)
 
 ;;;; Patch! 0.0.1 -> 0.1.0+
 ;;;; Will be removed in version 1.0.0+
@@ -536,7 +537,7 @@ visibility."
     (put-text-property 0 (length primary-name) 'face 'org-real-primary
                        primary-name)
     (insert primary-name)
-    (if reversed (insert " is"))
+    (if reversed (insert (if (org-real--is-plural primary-name) " are" " is")))
     (while reversed
       (insert " ")
       (insert (plist-get container :rel))
@@ -1226,7 +1227,9 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                           (setq tooltip-timer
                                 (org-real--tooltip
                                  (with-temp-buffer
-                                   (insert (format "The %s is %s the %s."
+                                   (insert (format (concat "The %s "
+                                                           (if (org-real--is-plural name) "are" "is")
+                                                           " %s the %s.")
                                                    name
                                                    (if (slot-boundp box :display-rel)
                                                        display-rel
@@ -1971,6 +1974,62 @@ set to the :loc slot of each box."
                            (concat "?rel=" (plist-get container :rel))))))
            containers
            "/")))
+
+(defun org-real--is-plural (noun)
+  "Determine if any word in NOUN has a base (root) word.
+
+Uses either Ispell, aspell, or hunspell based on user settings."
+  (condition-case err
+      (progn
+        (ispell-set-spellchecker-params)
+        (let* ((words (split-string noun))
+               (orig-args (ispell-get-ispell-args))
+               (args (append
+                      (if (and ispell-current-dictionary
+                               (not (member "-d" orig-args)))
+                          (list "-d" ispell-current-dictionary))
+                      orig-args
+                      (if ispell-current-personal-dictionary
+                          (list "-p" ispell-current-personal-dictionary))
+                      (if ispell-encoding8-command
+	                        (if ispell-really-hunspell
+		                          (list ispell-encoding8-command
+			                              (upcase (symbol-name (ispell-get-coding-system))))
+		                        (list
+		                         (concat ispell-encoding8-command
+			                               (symbol-name (ispell-get-coding-system))))))
+                      ispell-extra-args))
+               (mode (cond (ispell-really-aspell "munch")
+                           ((or ispell-really-hunspell
+                                (not (not (string-match-p "ispell" ispell-program-name))))
+                            "-m")
+                           (t (error (concat ispell-program-name " is not supported.")))))
+               (program (concat ispell-program-name " " mode " " (string-join args " ")))
+               (results (mapcar
+                         (lambda (word)
+                           (shell-command-to-string (concat "echo " word " | " program)))
+                         words)))
+          (cond
+           (ispell-really-aspell
+            (seq-some
+             (lambda (result)
+               (not (not (string-match-p "/S" result))))
+             results))
+           (ispell-really-hunspell
+            (seq-some
+             (lambda (result)
+               (not (not (string-match-p "fl:[[:alnum:]]*S[[:alnum:]]*" result))))
+             results))
+           ((not (not (string-match-p "ispell" ispell-program-name)))
+            (seq-some
+             (lambda (result)
+               (not (not (string-match-p "(derives from root" result))))
+             results))
+           (t
+            (error (concat ispell-program-name " is not supported."))))))
+    (error (progn
+             (message (error-message-string err))
+             nil))))
 
 (provide 'org-real)
 
