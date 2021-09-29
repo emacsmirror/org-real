@@ -1235,8 +1235,8 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
           (when (eq dir 'entered)
             (save-excursion
               (let ((inhibit-read-only t))
-                (org-real--draw box 'selected)
-                (if visible-rel-box (org-real--draw visible-rel-box 'rel))))
+                (if visible-rel-box (org-real--draw visible-rel-box 'rel))
+                (org-real--draw box 'selected)))
             (if (slot-boundp box :help-echo) (message help-echo))
             (if (slot-boundp box :metadata)
                 (setq tooltip-timer (org-real--tooltip metadata))
@@ -1246,18 +1246,19 @@ If INCLUDE-ON-TOP is non-nil, also include height on top of box."
                     (setq tooltip-timer
                           (org-real--tooltip
                            (with-temp-buffer
-                             (insert (format (concat "The %s "
-                                                     (if (org-real--is-plural name) "are" "is")
-                                                     " %s the %s.")
-                                             name rel rel-name))
+                             (insert (format
+                                      (concat "The %s "
+                                              (if (org-real--is-plural name) "are" "is")
+                                              " %s the %s.")
+                                      name rel rel-name))
                              (let ((fill-column org-real-tooltip-max-width))
                                (fill-paragraph t))
                              (buffer-string))))))))
           (when (eq dir 'left)
             (save-excursion
               (let ((inhibit-read-only t))
-                (org-real--draw box t)
-                (if visible-rel-box (org-real--draw visible-rel-box t))))
+                (if visible-rel-box (org-real--draw visible-rel-box t))
+                (org-real--draw box t)))
             (if tooltip-timer (cancel-timer tooltip-timer))))))))
 
 (cl-defmethod org-real--jump-other-window ((box org-real-box))
