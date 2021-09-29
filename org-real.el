@@ -1964,7 +1964,7 @@ set to the :loc slot of each box."
   "Create an org real box from the current buffer's headlines."
   (org-columns-get-format)
   (let* ((headlines (cddr (org-element-parse-buffer 'headline)))
-         (filename (buffer-file-name))
+         (filename (buffer-name))
          (title (or (concat (file-name-base filename) "." (file-name-extension filename))
                     "Document"))
          (world (org-real-box))
