@@ -170,7 +170,8 @@
 
 (face-spec-set
  'org-real-primary
- '((t :foreground "light slate blue"))
+ '((((background dark)) (:foreground "turquoise"))
+   (t (:foreground "dark cyan")))
  'face-defface-spec)
 
 (defface org-real-selected nil
