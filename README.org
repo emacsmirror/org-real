@@ -130,23 +130,10 @@ Keep track of real things as org-mode links.
    =org-real-apply= with the cursor on top of the new link to apply
    changes from that link to the buffer.
 
-** Org Real mode
-
+** Opening links
    To open a real link, place the cursor within the link and press
    =C-c C-o=. This will display a popup buffer in Org Real mode
-   showing the location of the link. Use =S-TAB= to cycle the
-   visibility level of all children or just =TAB= to toggle the
-   visibility of children for a single box.
-
-   In the org real diagram, emacs movement keys will navigate by boxes
-   rather than characters. Each box in the diagram has these options:
-
-   - =RET / mouse-1= Jump to first occurrence of link
-   - =o= Cycle occurrences of links in other window
-   - =M-RET= Open all occurences of links by splitting the current window
-   - =r= Jump to the box directly related to the current box
-
-   [[file:demo/org-real-mode.gif]]
+   showing the location of the link.
 
 ** =org-real-world=
 
@@ -178,11 +165,28 @@ Keep track of real things as org-mode links.
    - to the right of
    - to the left of
 
-   [[file:demo/headline-relationships.png]]
-
-
    The tooltip for each headline shows the values that would be
    displayed if the org file was in org columns view.
+
+   [[file:demo/headlines.gif]]
+
+** Org Real mode
+
+   Once in Org Real mode, you can cycle the visibility level of all
+   children with =S-TAB= or use =TAB= to toggle the visibility of
+   children for a single box.
+
+   Emacs movement keys will navigate by boxes rather than
+   characters. Each box in the diagram has these keybindings:
+
+   - =RET / mouse-1= Jump to first occurrence of link
+   - =o= Cycle occurrences of links in other window
+   - =M-RET= Open all occurences of links by splitting the current window
+   - =r= Jump to the box directly related to the current box
+   - =TAB= expand/collapse children boxes
+
+   [[file:demo/org-real-mode.gif]]
+
 * Development
 
 ** Setup
