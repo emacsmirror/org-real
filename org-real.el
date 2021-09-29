@@ -1395,7 +1395,6 @@ If FORCE-VISIBLE, always make CHILD visible in PARENT."
   (if (slot-boundp box :height) (slot-makeunbound box :height))
   (mapc 'org-real--make-dirty (org-real--get-children box 'all)))
 
-;; TODO check if `eq' works
 (cl-defmethod org-real--next ((box org-real-box) &optional exclude-children)
   "Retrieve any boxes for which the :rel-box slot is BOX.
 
