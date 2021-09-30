@@ -1,17 +1,17 @@
 #+TITLE: Projects
 
-* Ideas
-** Keyboard pants
+* Ideas                                                        :leisure:tech:
+** TODO [#A] Keyboard pants
    :PROPERTIES:
    :REL: on top of
    :END:
-** Org real
-* Personal
-** Banking
-** Healthcare
-* Work
-** Configure emacs
-** Install adobe illustrator
+** DONE [#B] Org real
+* Personal                                                         :personal:
+** TODO [#C] Banking
+** TODO [#C] Healthcare
+* Work                                                                 :work:
+** DONE [#A] Configure emacs                                   :productivity:
+** DONE [#C] Install adobe illustrator
    :PROPERTIES:
    :REL: in front of
    :END:
