@@ -406,7 +406,7 @@ diagram."
                                   (org-real--parse-buffer)))
                (context-boxes (mapcar
                                (lambda (containers)
-                                 (org-real--make-instance 'boxy-box containers))
+                                 (org-real--make-instance 'boxy-box containers t))
                                container-matrix)))
           (mapc
            (lambda (context) (boxy-merge-into context box))
@@ -522,17 +522,23 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
 
 ;;;; Boxy box implementation
 
-(cl-defmethod org-real--make-instance ((_ (subclass boxy-box)) containers)
+(cl-defmethod org-real--make-instance ((_ (subclass boxy-box))
+                                       containers
+                                       &optional skip-primary)
   "Create a `boxy-box' from CONTAINERS."
   (let ((world (boxy-box
                 :margin-x org-real-margin-x
                 :margin-y org-real-margin-y
                 :padding-x org-real-padding-x
                 :padding-y org-real-padding-y)))
-    (org-real--add-container containers world)
+    (org-real--add-container containers world skip-primary)
     world))
 
-(cl-defmethod org-real--add-container (containers (prev boxy-box) &optional force-visible)
+(cl-defmethod org-real--add-container (containers
+                                       (prev boxy-box)
+                                       &optional
+                                       skip-primary
+                                       force-visible)
   "Add the first container from CONTAINERS to PREV.
 
 If FORCE-VISIBLE, force the child to be visible regardless of its
@@ -547,17 +553,18 @@ level."
                 (tooltip (concat "The " name verb rel " the " rel-name ".")))
       (oset box :tooltip (boxy-fill-tooltip tooltip))
       (oset box :rel rel))
-    (when containers
+    (if (not containers)
+        (unless skip-primary (oset box :primary t))
       (let ((next-rel (plist-get (car containers) :rel)))
         (cond
          ((member next-rel boxy-children-relationships)
           (object-add-to-list box :expand-children
                               `(lambda (box)
-                                 (org-real--add-container ',containers box))))
+                                 (org-real--add-container ',containers box ,skip-primary))))
          ((member next-rel boxy-sibling-relationships)
           (object-add-to-list box :expand-siblings
                               `(lambda (box)
-                                 (org-real--add-container ',containers box t)))))))
+                                 (org-real--add-container ',containers box ,skip-primary t)))))))
     (boxy-add-next box prev force-visible)))
 
 (cl-defmethod org-real--add-headline (headline
