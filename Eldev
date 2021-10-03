@@ -1,5 +1,9 @@
 ; -*- mode: emacs-lisp; lexical-binding: t -*-
 
+(setq eldev-standard-excludes '(".*" "/dist/" "/deps/"))
+
+(eldev-use-local-dependency "deps/boxy" 'packaged)
+
 (eldev-defcommand
  org_real-md5 (&rest _)
  "Create md5 checksum of .tar and .el files in dist folder."
@@ -17,16 +21,15 @@
  org_real-test (&rest _)
  "Runs tests against all org files in tests folder."
  :override t
- (require 'cl-lib)
- (require 'org-element)
- (load-file "org-real.el")
+ (eldev-load-project-dependencies)
+ (require 'org-real)
  (let ((failures 0))
    (cl-flet* ((get-expected ()
                             (save-excursion
                               (re-search-forward "#\\+begin_example")
                               (org-element-property :value (org-element-at-point))))
               (get-actual ()
-                          (with-current-buffer (get-buffer "Org Real")
+                          (with-current-buffer (get-buffer "*Boxy*")
                             (buffer-string)))
               (print-result (title result)
                             (message "    %s : %s"
@@ -39,7 +42,7 @@
                                   (save-window-excursion
                                     (with-temp-buffer
                                       (insert expected)
-                                      (diff-buffers (get-buffer "Org Real")
+                                      (diff-buffers (get-buffer "*Boxy*")
                                                     (current-buffer)
                                                     nil t))
                                     (with-current-buffer (get-buffer "*Diff*")
