@@ -5,6 +5,8 @@ stages:
 package:
   stage: build
   image: silex/emacs:27
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
   before_script:
     - curl -fsSL https://raw.github.com/doublep/eldev/master/webinstall/eldev | sh
     - export PATH=$PATH:/root/.eldev/bin
