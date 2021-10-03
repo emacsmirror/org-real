@@ -107,6 +107,8 @@ Keep track of real things as org-mode links.
 
    [[file:demo/org-real-mode.gif]]
 
+* License
+  GPLv3
 * Development
 
 ** Setup
