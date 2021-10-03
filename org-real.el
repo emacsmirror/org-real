@@ -525,7 +525,9 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
 (cl-defmethod org-real--make-instance ((_ (subclass boxy-box))
                                        containers
                                        &optional skip-primary)
-  "Create a `boxy-box' from CONTAINERS."
+  "Create a `boxy-box' from CONTAINERS.
+
+If SKIP-PRIMARY is non-nil, don't highlight the primary box."
   (let ((world (boxy-box
                 :margin-x org-real-margin-x
                 :margin-y org-real-margin-y
@@ -540,6 +542,8 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
                                        skip-primary
                                        force-visible)
   "Add the first container from CONTAINERS to PREV.
+
+If SKIP-PRIMARY, don't highlight the primary box.
 
 If FORCE-VISIBLE, force the child to be visible regardless of its
 level."
