@@ -55,7 +55,7 @@
 (require 'cl-lib)
 (require 'ispell)
 
-;;;; Customization variables
+;;;; Options
 
 (defgroup org-real nil
   "Customization options for org-real"
@@ -229,6 +229,27 @@ diagram."
            :rel-face rel-face
            :selected-face selected-face))
 
+(defun org-real--get-header (containers)
+  "Get a textual representation of CONTAINERS."
+  (let* ((reversed (reverse containers))
+         (container (pop reversed))
+         (primary-name (plist-get container :name))
+         (header ""))
+    (put-text-property 0 (length primary-name) 'face 'org-real-primary
+                       primary-name)
+    (cl-flet ((append-str (&rest strings)
+                          (setq header (apply 'concat header strings))))
+      (append-str (make-string org-real-margin-y ?\n)
+                  (make-string org-real-margin-x ?\s)
+                  "The " primary-name)
+      (if reversed (append-str (if (org-real--is-plural primary-name) " are" " is")))
+      (while reversed
+        (append-str " " (plist-get container :rel))
+        (setq container (pop reversed))
+        (append-str " the " (plist-get container :name)))
+      (append-str ".")
+      header)))
+
 ;;;; Interactive functions
 
 (defun org-real-world ()
@@ -257,7 +278,6 @@ diagram."
           (when match
             (with-current-buffer (get-buffer "*Boxy*")
               (boxy-jump-to-box match)))))))
-
 
 (defun org-real-apply ()
   "Apply any change from the real link at point to the current buffer."
@@ -334,33 +354,6 @@ diagram."
               (mapc 'funcall changes)))
           (pop new-containers)))))
   (message nil))
-
-;;;; Pretty printing
-
-(defun org-real--append-str (str place)
-  "Append string STR to generalized variable PLACE."
-  (set place (concat (eval place) str)))
-
-(defun org-real--get-header (containers)
-  "Get a textual representation of CONTAINERS."
-  (let* ((reversed (reverse containers))
-         (container (pop reversed))
-         (primary-name (plist-get container :name))
-         (header ""))
-    (put-text-property 0 (length primary-name) 'face 'org-real-primary
-                       primary-name)
-    (cl-flet ((append-str (&rest strings)
-                          (setq header (apply 'concat header strings))))
-      (append-str (make-string org-real-margin-y ?\n)
-                  (make-string org-real-margin-x ?\s)
-                  "The " primary-name)
-      (if reversed (append-str (if (org-real--is-plural primary-name) " are" " is")))
-      (while reversed
-        (append-str " " (plist-get container :rel))
-        (setq container (pop reversed))
-        (append-str " the " (plist-get container :name)))
-      (append-str ".")
-      header)))
 
 ;;;; `org-insert-link' configuration
 
