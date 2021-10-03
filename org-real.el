@@ -17,26 +17,9 @@
 ;; The function `org-real-world' will display all real links in the
 ;; current buffer.
 ;;
-;; The function `org-real-headlines' will display all headlines in the
-;; current org file as an org-real diagram.  The relationship between
-;; a headline and its parent can be set by using a REL property on the
-;; child headline.  Valid values for REL are:
-;;
-;;   - on top of
-;;   - in front of
-;;   - behind
-;;   - above
-;;   - below
-;;   - to the right of
-;;   - to the left of
-;;
-;;   The tooltip in `org-real-headlines' shows the values for each row
-;;   in `org-columns' and can be customized the same way as org
-;;   columns view.
-;;
-;; When in an Org Real mode diagram, the standard movement keys will
-;; move by boxes rather than characters.  S-TAB will cycle the
-;; visibility of all children.  Each box has the following keys:
+;; When in a boxy mode diagram, the standard movement keys will move
+;; by boxes rather than characters.  S-TAB will cycle the visibility
+;; of all children.  Each box has the following keys:
 ;;
 ;;   TAB   - Cycle visibility of box's children
 ;;   RET   - Jump to first occurrence of link.
@@ -56,7 +39,6 @@
 (require 'boxy)
 (require 'eieio)
 (require 'org-element)
-(require 'org-colview)
 (require 'cl-lib)
 (require 'ispell)
 
@@ -263,22 +245,6 @@ diagram."
             (with-current-buffer (get-buffer "*Boxy*")
               (boxy-jump-to-box match)))))))
 
-(defun org-real-headlines ()
-  "View all org headlines as an org real diagram."
-  (interactive)
-  (let ((path (seq-filter 'identity (append (list (org-entry-get nil "ITEM")) (reverse (org-get-outline-path)))))
-        (world (save-excursion (org-real--parse-headlines)))
-        match)
-    (org-real-pp world
-             :display-buffer-fn 'display-buffer-same-window
-             :select t
-             :visibility 1
-             :max-visibility 2)
-    (while (and path (or (not match) (not (boxy-is-visible match t))))
-      (setq match (boxy-find-matching (boxy-box :name (pop path)) world)))
-    (when match
-      (with-current-buffer (get-buffer "*Boxy*")
-        (boxy-jump-to-box match)))))
 
 (defun org-real-apply ()
   "Apply any change from the real link at point to the current buffer."
@@ -571,71 +537,6 @@ level."
                                  (org-real--add-container ',containers box ,skip-primary t)))))))
     (boxy-add-next box prev force-visible)))
 
-(cl-defmethod org-real--add-headline (headline
-                                      (parent boxy-box))
-  "Add HEADLINE to world as a child of PARENT."
-  (with-slots (markers (parent-level level)) parent
-    (with-current-buffer (marker-buffer (car markers))
-      (let* ((partitioned (seq-group-by
-                           (lambda (h)
-                             (let ((child-rel (or (org-entry-get
-                                                   (org-element-property :begin h)
-                                                   "REL")
-                                                  "in")))
-                               (if (member child-rel boxy-children-relationships)
-                                   'children
-                                 'siblings)))
-                           (cddr headline)))
-             (children (alist-get 'children partitioned))
-             (siblings (alist-get 'siblings partitioned))
-             (pos (org-element-property :begin headline))
-             (columns (save-excursion (goto-char pos) (org-columns--collect-values)))
-             (max-column-length (apply 'max 0
-                                       (mapcar
-                                        (lambda (column)
-                                          (length (cadr (car column))))
-                                        columns)))
-             (rel (save-excursion (goto-char pos) (or (org-entry-get nil "REL") "in")))
-             (level (if (member rel boxy-children-relationships)
-                        (+ 1 parent-level)
-                      parent-level))
-             (name (org-element-property :title headline))
-             (box (boxy-box :name (if (string-match org-link-bracket-re name)
-                                      (match-string 2 name)
-                                    name)
-                            :rel rel
-                            :level level
-                            :rel-box parent
-                            :parent parent
-                            :tooltip (mapconcat
-                                       (lambda (column)
-                                         (format
-                                          (concat "%" (number-to-string max-column-length) "s : %s")
-                                          (cadr (car column))
-                                          (cadr column)))
-                                       columns
-                                       "\n")
-                            :markers (list (set-marker (point-marker) pos))
-                            :in-front (string= rel "in front of")
-                            :on-top (string= rel "on top of")
-                            :y-order (cond
-                                      ((string= rel "in front of") 1.0e+INF)
-                                      ((string= rel "on top of") -1.0e+INF)
-                                      (t 0))
-                            :primary t)))
-        (boxy-add-next box parent)
-        (if children
-            (object-add-to-list box :expand-children
-                                `(lambda (box)
-                                   (mapc
-                                    (lambda (h) (org-real--add-headline h box))
-                                    ',(alist-get 'children partitioned)))))
-        (if siblings
-            (object-add-to-list box :expand-siblings
-                                `(lambda (box)
-                                   (mapc
-                                    (lambda (h) (org-real--add-headline h box))
-                                    ',(alist-get 'siblings partitioned)))))))))
 
 ;;;; Utility expressions
 
@@ -709,27 +610,6 @@ set to the :loc slot of each box."
                           (set-marker (point-marker) (org-element-property :begin link)))
                          t))))
     container-matrix))
-
-(defun org-real--parse-headlines ()
-  "Create an org real box from the current buffer's headlines."
-  (org-columns-get-format)
-  (let* ((headlines (cddr (org-element-parse-buffer 'headline)))
-         (filename (buffer-name))
-         (title (or (concat (file-name-base filename) "." (file-name-extension filename))
-                    "Document"))
-         (world (boxy-box :margin-x org-real-margin-x
-                          :margin-y org-real-margin-y
-                          :padding-x org-real-padding-x
-                          :padding-y org-real-padding-y))
-         (document (boxy-box :name title
-                             :tooltip ""
-                             :markers (list (point-min-marker)))))
-    (boxy-add-next document world)
-    (mapc
-     (lambda (headline)
-        (org-real--add-headline headline document))
-     headlines)
-    world))
 
 (defun org-real--to-link (containers)
   "Create a link string from CONTAINERS."
