@@ -90,9 +90,9 @@ Keep track of real things as org-mode links.
      (define-key org-mode-map (kbd "C-c r w") 'org-real-world)
    #+end_src
 
-** Org Real mode
+** Boxy mode
 
-   Once in Org Real mode, you can cycle the visibility level of all
+   Once in boxy mode, you can cycle the visibility level of all
    children with =S-TAB= or use =TAB= to toggle the visibility of
    children for a single box.
 
@@ -105,7 +105,7 @@ Keep track of real things as org-mode links.
    - =r= Jump to the box directly related to the current box
    - =TAB= expand/collapse children boxes
 
-   [[file:demo/org-real-mode.gif]]
+   [[file:demo/boxy-mode.gif]]
 
 * License
   GPLv3
