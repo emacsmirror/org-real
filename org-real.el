@@ -54,6 +54,7 @@
 (require 'org-element)
 (require 'cl-lib)
 (require 'ispell)
+(require 'url-parse)
 
 ;;;; Options
 
