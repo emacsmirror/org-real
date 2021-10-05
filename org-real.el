@@ -238,7 +238,7 @@ diagram."
     (put-text-property 0 (length primary-name) 'face 'org-real-primary
                        primary-name)
     (cl-flet ((append-str (&rest strings)
-                          (setq header (apply 'concat header strings))))
+                          (setq header (apply #'concat header strings))))
       (append-str (make-string org-real-margin-y ?\n)
                   (make-string org-real-margin-x ?\s)
                   "The " primary-name)
@@ -250,8 +250,9 @@ diagram."
       (append-str ".")
       header)))
 
-;;;; Interactive functions
+;;;; Commands
 
+;;;###autoload
 (defun org-real-world ()
   "View all real links in the current buffer."
   (interactive)
@@ -263,7 +264,7 @@ diagram."
          (world (boxy-merge
                  (mapcar
                   (lambda (containers)
-                    (org-real--make-instance 'boxy-box containers))
+                    (org-real--make-box containers))
                   (org-real--parse-buffer)))))
     (org-real-pp world
              :display-buffer-fn 'display-buffer-same-window
@@ -279,6 +280,7 @@ diagram."
             (with-current-buffer (get-buffer "*Boxy*")
               (boxy-jump-to-box match)))))))
 
+;;;###autoload
 (defun org-real-apply ()
   "Apply any change from the real link at point to the current buffer."
   (interactive)
@@ -351,7 +353,7 @@ diagram."
                                           ((or (= response ?n) (= response ?N)) nil)
                                           ((or (= response ?a) (= response ?A))
                                            (setq replace-all t))))))
-              (mapc 'funcall changes)))
+              (mapc #'funcall changes)))
           (pop new-containers)))))
   (message nil))
 
@@ -364,7 +366,7 @@ diagram."
 (defun org-real-follow (url &rest _)
   "Open a real link URL in a popup buffer."
   (let* ((containers (org-real--parse-url url (point-marker)))
-         (box (org-real--make-instance 'boxy-box (copy-tree containers))))
+         (box (org-real--make-box (copy-tree containers))))
     (if org-real-include-context
         (let* ((primary-name (plist-get (car (reverse containers)) :name))
                (container-matrix (seq-filter
@@ -378,7 +380,7 @@ diagram."
                                   (org-real--parse-buffer)))
                (context-boxes (mapcar
                                (lambda (containers)
-                                 (org-real--make-instance 'boxy-box containers t))
+                                 (org-real--make-box containers t))
                                container-matrix)))
           (mapc
            (lambda (context) (boxy-merge-into context box))
@@ -395,7 +397,7 @@ diagram."
                        (org-real--complete-thing "Thing: " container-matrix '()))))
     (catch 'confirm
       (while t
-        (org-real-pp (org-real--make-instance 'boxy-box containers)
+        (org-real-pp (org-real--make-box containers)
                  :header (org-real--get-header containers)
                  :visibility 0)
         (let ((response (read-event "RETURN    - Confirm\nBACKSPACE - Remove context\n+         - Add context")))
@@ -434,7 +436,7 @@ EXISTING containers will be excluded from the completion."
                        (cl-delete-duplicates
                         (mapcar
                          (lambda (container) (plist-get container :name))
-                         (apply 'append container-matrix)))))
+                         (apply #'append container-matrix)))))
          (result (completing-read prompt completions nil 'confirm))
          (existing-containers (car (seq-sort
                                     (lambda (a b) (> (length a) (length b)))
@@ -494,9 +496,7 @@ ORIG is `org-insert-link', ARGS are the arguments passed to it."
 
 ;;;; Boxy box implementation
 
-(cl-defmethod org-real--make-instance ((_ (subclass boxy-box))
-                                       containers
-                                       &optional skip-primary)
+(defun org-real--make-box (containers &optional skip-primary)
   "Create a `boxy-box' from CONTAINERS.
 
 If SKIP-PRIMARY is non-nil, don't highlight the primary box."
@@ -508,11 +508,11 @@ If SKIP-PRIMARY is non-nil, don't highlight the primary box."
     (org-real--add-container containers world skip-primary)
     world))
 
-(cl-defmethod org-real--add-container (containers
-                                       (prev boxy-box)
-                                       &optional
-                                       skip-primary
-                                       force-visible)
+(defun org-real--add-container (containers
+                                prev
+                                &optional
+                                skip-primary
+                                force-visible)
   "Add the first container from CONTAINERS to PREV.
 
 If SKIP-PRIMARY, don't highlight the primary box.
