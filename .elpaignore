@@ -1,6 +1,8 @@
-/deps
-/tests
-/.gitignore
-/.gitlab-ci.yml
-/.gitmodules
-/Eldev
+demo
+deps
+tests
+.gitignore
+.gitlab-ci.yml
+.gitmodules
+Eldev
+README.org
