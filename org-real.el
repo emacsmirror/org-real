@@ -3,7 +3,7 @@
 ;; Copyright (C) 2021 Free Software Foundation, Inc.
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 1.0.1
+;; Version: 1.0.2
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "1.0"))
 ;; Keywords: tools
@@ -328,6 +328,7 @@ diagram."
 
 ;;;; `org-insert-link' configuration
 
+;;;###autoload
 (org-link-set-parameters "real"
                          :follow #'org-real-follow
                          :complete #'org-real-complete)
