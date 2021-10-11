@@ -3,7 +3,7 @@
 ;; Copyright (C) 2021 Free Software Foundation, Inc.
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 1.0.1
+;; Version: 1.0.2
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "1.0"))
 ;; Keywords: tools
@@ -64,97 +64,66 @@
 
 (defcustom org-real-margin-x 2
   "Horizontal margin to be used when displaying boxes."
-  :type 'number
-  :group 'org-real)
+  :type 'number)
 
 (defcustom org-real-margin-y 1
   "Vertical margin to be used when displaying boxes."
-  :type 'number
-  :group 'org-real)
+  :type 'number)
 
 (defcustom org-real-padding-x 2
   "Horizontal padding to be used when displaying boxes."
-  :type 'number
-  :group 'org-real)
+  :type 'number)
 
 (defcustom org-real-padding-y 1
   "Vertical padding to be used when displaying boxes."
-  :type 'number
-  :group 'org-real)
+  :type 'number)
 
 (defcustom org-real-include-context t
   "Whether to show context when opening a real link."
-  :type 'boolean
-  :group 'org-real)
+  :type 'boolean)
 
 (defcustom org-real-flex-width 80
   "When merging links, try to keep width below this."
-  :type 'number
-  :group 'org-real)
+  :type 'number)
 
 (defcustom org-real-default-visibility 2
   "Default level to display boxes."
-  :type 'number
-  :group 'org-real)
+  :type 'number)
 
 (defcustom org-real-tooltips t
   "Show tooltips in an org real diagram."
-  :type 'boolean
-  :group 'org-real)
+  :type 'boolean)
 
 (defcustom org-real-tooltip-timeout 0.5
   "Idle time before showing tooltip in org real diagram."
-  :type 'number
-  :group 'org-real)
+  :type 'number)
 
 (defcustom org-real-tooltip-max-width 30
   "Maximum width of all tooltips."
-  :type 'number
-  :group 'org-real)
+  :type 'number)
 
 ;;;; Faces
 
 (defface org-real-default nil
-  "Default face used in Boxy mode."
-  :group 'boxy)
+  "Default face used in Boxy mode.")
 
-(defface org-real-primary nil
-  "Face for highlighting the name of a box."
-  :group 'boxy)
+(defface org-real-primary
+  '((((background dark)) (:foreground "turquoise"))
+    (t (:foreground "dark cyan")))
+  "Face for highlighting the name of a box.")
 
-(face-spec-set
- 'org-real-primary
- '((((background dark)) (:foreground "turquoise"))
-   (t (:foreground "dark cyan")))
- 'face-defface-spec)
+(defface org-real-selected
+   '((t :foreground "light slate blue"))
+  "Face for the current box border under cursor.")
 
-(defface org-real-selected nil
-  "Face for the current box border under cursor."
-  :group 'boxy)
+(defface org-real-rel
+   '((t :foreground "hot pink"))
+  "Face for the box which is related to the box under the cursor.")
 
-(face-spec-set
- 'org-real-selected
- '((t :foreground "light slate blue"))
- 'face-defface-spec)
-
-(defface org-real-rel nil
-  "Face for the box which is related to the box under the cursor."
-  :group 'boxy)
-
-(face-spec-set
- 'org-real-rel
- '((t :foreground "hot pink"))
- 'face-defface-spec)
-
-(defface org-real-tooltip nil
-  "Face for tooltips in a boxy diagram."
-  :group 'boxy)
-
-(face-spec-set
- 'org-real-tooltip
- '((((background dark)) (:background "gray30" :foreground "gray"))
-   (t (:background "gainsboro" :foreground "dim gray")))
- 'face-defface-spec)
+(defface org-real-tooltip
+   '((((background dark)) (:background "gray30" :foreground "gray"))
+     (t (:background "gainsboro" :foreground "dim gray")))
+  "Face for tooltips in a boxy diagram.")
 
 ;;;; Pretty printing
 
@@ -264,8 +233,7 @@ diagram."
                  (org-unbracket-string "<" ">" (match-string 0)))))
          (world (boxy-merge
                  (mapcar
-                  (lambda (containers)
-                    (org-real--make-box containers))
+                  #'org-real--make-box
                   (org-real--parse-buffer)))))
     (org-real-pp world
              :display-buffer-fn 'display-buffer-same-window
@@ -360,6 +328,7 @@ diagram."
 
 ;;;; `org-insert-link' configuration
 
+;;;###autoload
 (org-link-set-parameters "real"
                          :follow #'org-real-follow
                          :complete #'org-real-complete)
