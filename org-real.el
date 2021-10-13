@@ -50,7 +50,7 @@
 ;;;; Requirements
 
 ;;;###autoload
-(require 'org)
+(require 'ol)
 
 (require 'boxy)
 (require 'eieio)
@@ -304,7 +304,7 @@ diagram."
                                               (org-in-regexp org-link-bracket-re 1)
                                               (match-end 2)
                                               (match-string-no-properties 2))))
-                             (new-link (org-real--link-make-string replace-link old-desc)))
+                             (new-link (org-link-make-string replace-link old-desc)))
                         (push
                          `(lambda ()
                             (save-excursion
@@ -521,7 +521,10 @@ level."
 ;;;; Utility expressions
 
 (defun org-real--find-last-index (pred sequence)
-  "Return the index of the last element for which (PRED element) is non-nil in SEQUENCE."
+  "Return the index of the last matching element.
+
+Calls (PRED element) for each element in SEQUENCE until a match
+is found."
   (let ((i (- (length sequence) 1)))
     (catch 'match
       (mapc
@@ -530,27 +533,6 @@ level."
          (setq i (- i 1)))
        (reverse sequence))
       nil)))
-
-(defun org-real--link-make-string (link &optional description)
-  "Make a bracket link, consisting of LINK and DESCRIPTION.
-LINK is escaped with backslashes for inclusion in buffer."
-  (let* ((zero-width-space (string ?\x200B))
-   (description
-    (and (org-string-nw-p description)
-         ;; Description cannot contain two consecutive square
-         ;; brackets, or end with a square bracket.  To prevent
-         ;; this, insert a zero width space character between
-         ;; the brackets, or at the end of the description.
-         (replace-regexp-in-string
-    "\\(]\\)\\(]\\)"
-    (concat "\\1" zero-width-space "\\2")
-    (replace-regexp-in-string "]\\'"
-            (concat "\\&" zero-width-space)
-            (org-trim description))))))
-    (if (not (org-string-nw-p link)) description
-      (format "[[%s]%s]"
-        (org-link-escape link)
-        (if description (format "[%s]" description) "")))))
 
 (defun org-real--parse-url (str &optional marker)
   "Parse STR into a list of plists.
