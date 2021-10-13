@@ -1,6 +1,10 @@
 ; -*- mode: emacs-lisp; lexical-binding: t -*-
 
+(eldev-use-package-archive 'gnu)
+
 (setq eldev-standard-excludes '(".*" "/dist/" "/deps/"))
+
+(eldev-use-plugin 'autoloads)
 
 (eldev-use-local-dependency "deps/boxy" 'packaged)
 
@@ -37,7 +41,7 @@
                                          "\033[0;32mPASS\033[0m"
                                        "\033[0;31mFAIL\033[0m")
                                      title)
-                            (if (not result)
+                            (if (and (not result) (fboundp 'diff-buffers))
                                 (let ((expected (get-expected)))
                                   (save-window-excursion
                                     (with-temp-buffer
