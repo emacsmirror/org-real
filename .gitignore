@@ -3,5 +3,7 @@
 /Eldev-local
 /dist
 *.elc
+*-autoloads.el
+
 
 

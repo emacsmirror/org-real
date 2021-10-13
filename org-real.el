@@ -49,6 +49,9 @@
 
 ;;;; Requirements
 
+;;;###autoload
+(require 'ol)
+
 (require 'boxy)
 (require 'eieio)
 (require 'org-element)
