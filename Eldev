@@ -2,6 +2,8 @@
 
 (setq eldev-standard-excludes '(".*" "/dist/" "/deps/"))
 
+(eldev-use-plugin 'autoloads)
+
 (eldev-use-local-dependency "deps/boxy" 'packaged)
 
 (eldev-defcommand
