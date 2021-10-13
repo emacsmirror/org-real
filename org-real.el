@@ -5,7 +5,7 @@
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
 ;; Version: 1.0.2
 ;; File: org-real.el
-;; Package-Requires: ((emacs "26.1") (boxy "1.0"))
+;; Package-Requires: ((emacs "26.1") (boxy "1.0") (org "9.3"))
 ;; Keywords: tools
 ;; URL: https://gitlab.com/tygrdev/org-real
 
@@ -50,7 +50,7 @@
 ;;;; Requirements
 
 ;;;###autoload
-(require 'ol)
+(require 'org)
 
 (require 'boxy)
 (require 'eieio)
@@ -58,11 +58,12 @@
 (require 'cl-lib)
 (require 'ispell)
 (require 'url-parse)
+(require 'subr-x)
 
 ;;;; Options
 
 (defgroup org-real nil
-  "Customization options for org-real"
+  "Customization options for org-real."
   :group 'applications)
 
 (defcustom org-real-margin-x 2
