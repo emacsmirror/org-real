@@ -3,7 +3,7 @@
 ;; Copyright (C) 2021 Free Software Foundation, Inc.
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 1.0.3
+;; Version: 1.0.4
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "1.0") (org "9.3"))
 ;; Keywords: tools
