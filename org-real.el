@@ -337,6 +337,7 @@ diagram."
                          :follow #'org-real-follow
                          :complete #'org-real-complete)
 
+;;;###autoload
 (defun org-real-follow (url &rest _)
   "Open a real link URL in a popup buffer."
   (let* ((containers (org-real--parse-url url (point-marker)))
@@ -363,6 +364,7 @@ diagram."
              :header (org-real--get-header containers)
              :visibility 0)))
 
+;;;###autoload
 (defun org-real-complete (&optional existing)
   "Complete a real link or edit EXISTING link."
   (let* ((container-matrix (org-real--parse-buffer))
