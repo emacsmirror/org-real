@@ -503,10 +503,10 @@ level."
                 (rel-name (and (slot-boundp prev :name) (with-slots (name) prev name)))
                 (verb (if (org-real--is-plural name) " are " " is "))
                 (tooltip (concat "The " name verb rel " the " rel-name ".")))
-      (oset box :tooltip (boxy-fill-tooltip tooltip))
-      (oset box :rel rel))
+      (oset box tooltip (boxy-fill-tooltip tooltip))
+      (oset box rel rel))
     (if (not containers)
-        (unless skip-primary (oset box :primary t))
+        (unless skip-primary (oset box primary t))
       (let ((next-rel (plist-get (car containers) :rel)))
         (cond
          ((member next-rel boxy-children-relationships)
