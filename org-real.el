@@ -3,7 +3,7 @@
 ;; Copyright (C) 2021 Free Software Foundation, Inc.
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 1.0.3
+;; Version: 1.0.4
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "1.0") (org "9.3"))
 ;; Keywords: tools
@@ -337,6 +337,7 @@ diagram."
                          :follow #'org-real-follow
                          :complete #'org-real-complete)
 
+;;;###autoload
 (defun org-real-follow (url &rest _)
   "Open a real link URL in a popup buffer."
   (let* ((containers (org-real--parse-url url (point-marker)))
@@ -363,6 +364,7 @@ diagram."
              :header (org-real--get-header containers)
              :visibility 0)))
 
+;;;###autoload
 (defun org-real-complete (&optional existing)
   "Complete a real link or edit EXISTING link."
   (let* ((container-matrix (org-real--parse-buffer))
@@ -501,10 +503,10 @@ level."
                 (rel-name (and (slot-boundp prev :name) (with-slots (name) prev name)))
                 (verb (if (org-real--is-plural name) " are " " is "))
                 (tooltip (concat "The " name verb rel " the " rel-name ".")))
-      (oset box :tooltip (boxy-fill-tooltip tooltip))
-      (oset box :rel rel))
+      (oset box tooltip (boxy-fill-tooltip tooltip))
+      (oset box rel rel))
     (if (not containers)
-        (unless skip-primary (oset box :primary t))
+        (unless skip-primary (oset box primary t))
       (let ((next-rel (plist-get (car containers) :rel)))
         (cond
          ((member next-rel boxy-children-relationships)
