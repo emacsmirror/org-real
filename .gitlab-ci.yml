@@ -9,7 +9,7 @@ package:
     GIT_SUBMODULE_STRATEGY: recursive
   before_script:
     - curl -fsSL https://raw.github.com/doublep/eldev/master/webinstall/eldev | sh
-    - export PATH=$PATH:/root/.eldev/bin
+    - export PATH=$PATH:/root/.local/bin
   script:
     - eldev lint
     - eldev compile -W
