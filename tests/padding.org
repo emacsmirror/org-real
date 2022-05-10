@@ -6,6 +6,8 @@
    :PROPERTIES:
    :PADDING-Y: 0
    :PADDING-X: 0
+   :MARGIN-X: 2
+   :MARGIN-Y: 1
    :END:
 *** PASS [[real://1-2/1-1][in]]
     #+begin_example
@@ -122,6 +124,8 @@
    :PROPERTIES:
    :PADDING-Y: 2
    :PADDING-X: 3
+   :MARGIN-X: 2
+   :MARGIN-Y: 1
    :END:
 *** PASS [[real://1-2/1-1][in]]
     #+begin_example

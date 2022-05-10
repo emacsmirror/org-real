@@ -6,6 +6,8 @@
    :PROPERTIES:
    :MARGIN-Y: 0
    :MARGIN-X: 0
+   :PADDING-X: 2
+   :PADDING-Y: 1
    :END:
 *** PASS [[real://5-2/5-1?rel=above][above]]
     #+begin_example
@@ -61,6 +63,8 @@ The 8-1 is to the right of the 8-2.
    :PROPERTIES:
    :MARGIN-Y: 2
    :MARGIN-X: 3
+   :PADDING-X: 2
+   :PADDING-Y: 1
    :END:
 *** PASS [[real://1-2/1-1][in]]
     #+begin_example

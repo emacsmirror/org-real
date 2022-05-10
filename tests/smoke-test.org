@@ -3,6 +3,12 @@
 * Opening links
 
 ** PASS [[real://1-2/1-1][in]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 1-1 is in the 1-2.
@@ -20,6 +26,12 @@
    #+end_example
 
 ** PASS [[real://2-2/2-1?rel=on][on]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 2-1 is on the 2-2.
@@ -37,6 +49,12 @@
    #+end_example
 
 ** PASS [[real://3-2/3-1?rel=behind][behind]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 3-1 is behind the 3-2.
@@ -54,6 +72,12 @@
    #+end_example
 
 ** PASS [[real://4-2/4-1?rel=in front of][in front of]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 4-1 is in front of the 4-2.
@@ -70,6 +94,12 @@
    #+end_example
 
 ** PASS [[real://5-2/5-1?rel=above][above]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 5-1 is above the 5-2.
@@ -88,6 +118,12 @@
    #+end_example
 
 ** PASS [[real://6-2/6-1?rel=below][below]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 6-1 is below the 6-2.
@@ -107,6 +143,12 @@
 
    
 ** PASS [[real://7-2/7-1?rel=to the left of][left]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 7-1 is to the left of the 7-2.
@@ -119,6 +161,12 @@
    #+end_example
 
 ** PASS [[real://8-2/8-1?rel=to the right of][right]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 8-1 is to the right of the 8-2.
@@ -131,6 +179,12 @@
    #+end_example
 
 ** PASS [[real://9-2/9-1?rel=on top of][on top]]
+   :PROPERTIES:
+   :MARGIN-Y: 1
+   :MARGIN-X: 2
+   :PADDING-Y: 1
+   :PADDING-X: 2
+   :END:
    #+begin_example
 
   The 9-1 is on top of the 9-2.
