@@ -3,7 +3,7 @@
 ;; Copyright (C) 2021 Free Software Foundation, Inc.
 
 ;; Author: Tyler Grinn <tylergrinn@gmail.com>
-;; Version: 1.0.4
+;; Version: 1.0.5
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "1.0") (org "9.3"))
 ;; Keywords: tools
@@ -498,7 +498,8 @@ level."
   (let* ((container (pop containers))
          (name (plist-get container :name))
          (box (boxy-box :name name
-                        :markers (list (plist-get container :loc)))))
+                        :markers (list (plist-get container :loc))
+                        :post-jump-hook 'org-reveal)))
     (when-let* ((rel (plist-get container :rel))
                 (rel-name (and (slot-boundp prev :name) (with-slots (name) prev name)))
                 (verb (if (org-real--is-plural name) " are " " is "))
