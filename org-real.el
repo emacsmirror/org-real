@@ -1,6 +1,6 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
-;; Copyright (C) 2021 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 ;; Author: Taylor Grinn <grinntaylor@gmail.com>
 ;; Version: 1.0.6
@@ -49,7 +49,6 @@
 
 ;;;; Requirements
 
-;;;###autoload
 (require 'ol)
 
 (require 'boxy)
@@ -333,9 +332,10 @@ diagram."
 ;;;; `org-insert-link' configuration
 
 ;;;###autoload
-(org-link-set-parameters "real"
-                         :follow #'org-real-follow
-                         :complete #'org-real-complete)
+(with-eval-after-load 'ol
+  (org-link-set-parameters "real"
+                           :follow #'org-real-follow
+                           :complete #'org-real-complete))
 
 ;;;###autoload
 (defun org-real-follow (url &rest _)
