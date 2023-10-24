@@ -11,7 +11,7 @@ package:
     - curl -fsSL https://raw.github.com/doublep/eldev/master/webinstall/eldev | sh
     - export PATH=$PATH:/root/.local/bin
   script:
-    - eldev lint
+    - eldev lint doc re
     - eldev compile -W
     - eldev test
     - eldev package
