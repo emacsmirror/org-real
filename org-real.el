@@ -5,7 +5,7 @@
 ;; Author: Amy Grinn <grinn.amy@gmail.com>
 ;; Version: 1.0.6
 ;; File: org-real.el
-;; Package-Requires: ((emacs "26.1") (boxy "1.0") (org "9.3"))
+;; Package-Requires: ((emacs "26.1") (boxy "1.1") (org "9.3"))
 ;; Keywords: tools
 ;; URL: https://gitlab.com/tygrdev/org-real
 
