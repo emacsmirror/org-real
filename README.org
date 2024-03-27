@@ -1,4 +1,6 @@
-#+TITLE: Org Real
+#+TITLE: Org Real (archive)
+
+*This package has moved [[https://gitlab.com/grinn.amy/org-real][here]]*
 
 Keep track of real things as org-mode links.
 
