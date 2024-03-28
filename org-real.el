@@ -3,11 +3,11 @@
 ;; Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 ;; Author: Amy Grinn <grinn.amy@gmail.com>
-;; Version: 1.0.7
+;; Version: 1.0.8
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "1.1") (org "9.3"))
 ;; Keywords: tools
-;; URL: https://gitlab.com/tygrdev/org-real
+;; URL: https://gitlab.com/grinn.amy/org-real
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
