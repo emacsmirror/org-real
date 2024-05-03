@@ -4,6 +4,8 @@
 
 (eldev-use-plugin 'autoloads)
 
+(defun package--get-description (pkg) (signal 'file-missing nil))
+
 (eldev-defcommand
  org_real-test (&rest _)
  "Runs tests against all org files in tests folder."
