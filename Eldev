@@ -2,24 +2,7 @@
 
 (eldev-use-package-archive 'gnu)
 
-(setq eldev-standard-excludes '(".*" "/dist/" "/deps/"))
-
 (eldev-use-plugin 'autoloads)
-
-(eldev-use-local-dependency "deps/boxy" 'packaged)
-
-(eldev-defcommand
- org_real-md5 (&rest _)
- "Create md5 checksum of .tar and .el files in dist folder."
- (mapc
-  (lambda (file)
-    (write-region
-     (secure-hash 'md5 file)
-     nil
-     (concat (file-name-sans-extension file) ".md5")))
-  (append
-   (directory-files eldev-dist-dir t "\\.tar\\'")
-   (directory-files eldev-dist-dir t "\\.el\\'"))))
 
 (eldev-defcommand
  org_real-test (&rest _)
