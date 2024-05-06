@@ -3,7 +3,7 @@
 ;; Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 ;; Author: Amy Grinn <grinn.amy@gmail.com>
-;; Version: 1.0.8
+;; Version: 1.0.9
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "1.1") (org "9.3"))
 ;; Keywords: tools
