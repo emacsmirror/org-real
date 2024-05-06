@@ -15,7 +15,6 @@ package:
     - eldev compile -W
     - eldev test
     - eldev package
-    - eldev md5
   artifacts:
     paths:
       - dist/
