@@ -1,11 +1,11 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
-;; Copyright (C) 2021-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 ;; Author: Amy Grinn <grinn.amy@gmail.com>
-;; Version: 1.0.9
+;; Version: 1.0.10
 ;; File: org-real.el
-;; Package-Requires: ((emacs "26.1") (boxy "1.1") (org "9.3"))
+;; Package-Requires: ((emacs "26.1") (boxy "2.0") (org "9.3"))
 ;; Keywords: tools
 ;; URL: https://gitlab.com/grinn.amy/org-real
 
@@ -132,6 +132,7 @@
 
 (cl-defun org-real-pp (box
                        &key
+                       buffer
                        (display-buffer-fn 'display-buffer-pop-up-window)
                        (visibility org-real-default-visibility)
                        (max-visibility 3)
@@ -151,6 +152,9 @@
                        (rel-face 'org-real-rel)
                        (selected-face 'org-real-selected))
   "Pretty print BOX in a popup buffer.
+
+BUFFER can be the buffer to display the boxy diagram in, otherwise it
+will always use the *Boxy* buffer.
 
 If HEADER is passed in, it will be printed above the diagram.
 
@@ -183,6 +187,7 @@ DEFAULT-FACE, PRIMARY-FACE, TOOLTIP-FACE, REL-FACE, and
 SELECTED-FACE can be set to change the appearance of the boxy
 diagram."
   (boxy-pp box
+           :buffer buffer
            :display-buffer-fn display-buffer-fn
            :visibility visibility
            :max-visibility max-visibility
@@ -501,23 +506,23 @@ level."
                         :markers (list (plist-get container :loc))
                         :post-jump-hook 'org-reveal)))
     (when-let* ((rel (plist-get container :rel))
-                (rel-name (and (slot-boundp prev :name) (with-slots (name) prev name)))
+                (rel-name (boxy-box-name prev))
                 (verb (if (org-real--is-plural name) " are " " is "))
                 (tooltip (concat "The " name verb rel " the " rel-name ".")))
-      (oset box tooltip (boxy-fill-tooltip tooltip))
-      (oset box rel rel))
+      (setf (boxy-box-tooltip box) (boxy-fill-tooltip tooltip))
+      (setf (boxy-box-rel box) rel))
     (if (not containers)
-        (unless skip-primary (oset box primary t))
+        (unless skip-primary (setf (boxy-box-primary box) t))
       (let ((next-rel (plist-get (car containers) :rel)))
         (cond
          ((member next-rel boxy-children-relationships)
-          (object-add-to-list box :expand-children
-                              `(lambda (box)
-                                 (org-real--add-container ',containers box ,skip-primary))))
+          (push `(lambda (box)
+                   (org-real--add-container ',containers box ,skip-primary))
+                (boxy-box-expand-children box)))
          ((member next-rel boxy-sibling-relationships)
-          (object-add-to-list box :expand-siblings
-                              `(lambda (box)
-                                 (org-real--add-container ',containers box ,skip-primary t)))))))
+          (push `(lambda (box)
+                   (org-real--add-container ',containers box ,skip-primary t))
+                (boxy-box-expand-siblings box))))))
     (boxy-add-next box prev force-visible)))
 
 
