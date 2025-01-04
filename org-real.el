@@ -3,7 +3,7 @@
 ;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 ;; Author: Amy Grinn <grinn.amy@gmail.com>
-;; Version: 1.0.10
+;; Version: 1.0.11
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "2.0") (org "9.3"))
 ;; Keywords: tools
@@ -52,7 +52,6 @@
 (require 'ol)
 
 (require 'boxy)
-(require 'eieio)
 (require 'org-element)
 (require 'cl-lib)
 (require 'ispell)
