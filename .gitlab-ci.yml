@@ -4,7 +4,7 @@ stages:
 
 package:
   stage: build
-  image: silex/emacs:27
+  image: silex/emacs:29
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
   before_script:
