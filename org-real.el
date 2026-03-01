@@ -1,13 +1,13 @@
 ;;; org-real.el --- Keep track of real things as org-mode links -*- lexical-binding: t -*-
 
-;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2026 Free Software Foundation, Inc.
 
-;; Author: Amy Grinn <grinn.amy@gmail.com>
-;; Version: 1.0.11
+;; Author: Amy Pillow <amypillow@lavache.com>
+;; Version: 1.0.12
 ;; File: org-real.el
 ;; Package-Requires: ((emacs "26.1") (boxy "2.0") (org "9.3"))
 ;; Keywords: tools
-;; URL: https://gitlab.com/grinn.amy/org-real
+;; URL: https://codeberg.org/strawburster/org-real
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by

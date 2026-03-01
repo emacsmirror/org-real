@@ -1,0 +1,24 @@
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build:
+    runs-on: codeberg-tiny-lazy
+    container: silex/emacs:30-ci
+    steps:
+      - name: Checkout
+        run: |
+          git init -b main
+          git remote add origin $FORGEJO_SERVER_URL/$FORGEJO_REPOSITORY
+          git fetch origin $FORGEJO_SHA
+          git checkout --detach $FORGEJO_SHA
+      - name: Install dependencies
+        run: |
+          curl -fsSL https://raw.github.com/emacs-eldev/eldev/master/bin/eldev > /usr/bin/eldev
+          chmod a+x /usr/bin/eldev
+      - run: |
+          eldev doctor
+          eldev lint doc re
+          eldev compile -W
+          eldev test

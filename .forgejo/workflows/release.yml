@@ -1,0 +1,34 @@
+on:
+  push:
+    tags:
+      - '*.*.*'
+jobs:
+  release:
+    runs-on: codeberg-tiny-lazy
+    container: silex/emacs:30-ci
+    steps:
+      - name: Install bullshit dependencies
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+          \. "$HOME/.nvm/nvm.sh"
+          nvm install --lts
+          ln -s "`type -p node`" /usr/bin/node
+      - uses: actions/checkout@v4
+      - name: Install actual dependencies
+        run: |
+          curl -fsSL https://raw.github.com/emacs-eldev/eldev/master/bin/eldev > /usr/bin/eldev
+          chmod a+x /usr/bin/eldev
+      - name: Package
+        run: |
+          eldev package
+      - name: Sign
+        run: |
+          cat << EOF | gpg --pinentry-mode loopback --passphrase ${{ secrets.STRAWBURSTER_PASSPHRASE }} --import
+          ${{ secrets.STRAWBURSTER_GPG_KEY }}
+          EOF
+          cd dist
+          ls | xargs -i{} gpg --pinentry-mode loopback --passphrase ${{ secrets.STRAWBURSTER_PASSPHRASE }} -ba -o {}.sig {}
+      - uses: actions/forgejo-release@v2.11.1
+        with:
+          direction: upload
+          release-dir: dist
