@@ -1,7 +1,5 @@
 #+TITLE: Org Real
 
-*This project has moved to [[https://codeberg.org/strawburster/org-real][codeberg]]*
-
 Keep track of real things as org-mode links.
 
 =package-install RET org-real RET=
